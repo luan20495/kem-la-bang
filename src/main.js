@@ -1067,6 +1067,10 @@ async function main() {
     btn.title = compact ? 'Mở rộng' : 'Thu gọn';
   }
 
+  function isMobileUi() {
+    return window.matchMedia('(max-width: 900px)').matches;
+  }
+
   function setHudCompact(compact, { persist = true, refit = false } = {}) {
     const hud = document.getElementById('hud');
     if (!hud) return;
@@ -1085,11 +1089,15 @@ async function main() {
   function setRailCollapsed(collapsed, { persist = true, refit = false } = {}) {
     const rail = document.getElementById('rail');
     const fab = document.getElementById('rail-fab');
+    const scrim = document.getElementById('rail-scrim');
     if (!rail || !fab) return;
     rail.classList.toggle('is-collapsed', collapsed);
     rail.hidden = collapsed;
     fab.hidden = !collapsed;
     fab.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    const sheetOpen = !collapsed && isMobileUi();
+    document.body.classList.toggle('is-rail-open', sheetOpen);
+    if (scrim) scrim.hidden = !sheetOpen;
     if (!collapsed) {
       gsap.set(rail, { clearProps: 'opacity,transform,x' });
     }
@@ -1104,26 +1112,47 @@ async function main() {
   }
 
   try {
+    // Mobile defaults to map-first (collapsed). Desktop keeps rail open unless saved collapsed.
+    const railPref = sessionStorage.getItem(KEY_RAIL);
+    const collapsed = isMobileUi() ? railPref !== '0' : railPref === '1';
     setHudCompact(sessionStorage.getItem(KEY_HUD) !== '1', { persist: false, refit: false });
-    setRailCollapsed(sessionStorage.getItem(KEY_RAIL) === '1', { persist: false, refit: false });
+    setRailCollapsed(collapsed, { persist: false, refit: false });
     const routesFold = document.getElementById('routes-fold');
-    if (routesFold && sessionStorage.getItem(KEY_ROUTES) === '1') routesFold.open = true;
+    if (routesFold) {
+      // Keep corridors tucked on phones so the stop list stays reachable.
+      if (isMobileUi() && sessionStorage.getItem(KEY_ROUTES) == null) routesFold.open = false;
+      else if (sessionStorage.getItem(KEY_ROUTES) === '1') routesFold.open = true;
+    }
   } catch {
     syncHudExpandUi();
   }
+  document.documentElement.classList.add('is-ui-ready');
 
   document.getElementById('hud-expand')?.addEventListener('click', () => {
     const hud = document.getElementById('hud');
-    setHudCompact(!hud?.classList.contains('is-compact'));
+    setHudCompact(!hud?.classList.contains('is-compact'), { refit: true });
   });
-  document.getElementById('rail-collapse')?.addEventListener('click', () => setRailCollapsed(true));
-  document.getElementById('rail-fab')?.addEventListener('click', () => setRailCollapsed(false));
+  document.getElementById('rail-collapse')?.addEventListener('click', () =>
+    setRailCollapsed(true, { refit: true })
+  );
+  document.getElementById('rail-fab')?.addEventListener('click', () =>
+    setRailCollapsed(false, { refit: true })
+  );
+  document.getElementById('rail-scrim')?.addEventListener('click', () =>
+    setRailCollapsed(true, { refit: true })
+  );
   document.getElementById('routes-fold')?.addEventListener('toggle', (e) => {
     try {
       sessionStorage.setItem(KEY_ROUTES, e.currentTarget.open ? '1' : '0');
     } catch {
       /* ignore */
     }
+  });
+
+  window.matchMedia('(max-width: 900px)').addEventListener('change', () => {
+    const rail = document.getElementById('rail');
+    const collapsed = !rail || rail.hidden || rail.classList.contains('is-collapsed');
+    setRailCollapsed(collapsed, { persist: false, refit: true });
   });
 
   window.addEventListener('keydown', (e) => {

@@ -484,6 +484,24 @@ html[data-grade='dawn'] .grade {
   display: none !important;
 }
 
+.rail-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 28;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.rail-scrim[hidden] {
+  display: none !important;
+}
+
 .rail-fab:hover {
   transform: scale(1.02);
   box-shadow: var(--shadow-hud, 0 12px 36px rgba(0, 0, 0, 0.12));
@@ -2870,34 +2888,95 @@ html.is-route-editing .maplibregl-canvas-container:active {
     width: auto;
     max-height: 55vh;
   }
-}
 
-@media (max-width: 900px) {
-  .rail,
-  .rail-fab {
+  /* Map-first: brand lives in FAB / sheet — don't cover the map */
+  .brand--mobile {
     display: none !important;
   }
 
-  .brand--mobile {
-    display: block;
+  .topbar {
+    padding: calc(var(--space-3) + var(--safe-top)) calc(var(--space-3) + var(--safe-right)) 0
+      calc(var(--space-3) + var(--safe-left));
+    justify-content: flex-end;
   }
 
-  .sheet {
+  .tb {
+    width: 52px;
+    padding: 6px 4px 8px;
+    gap: 0;
+  }
+
+  .tb__btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .tb__txt {
+    font-size: 10px;
+    line-height: 1.1;
+  }
+
+  .rail-fab {
+    top: calc(var(--space-3) + var(--safe-top));
     left: calc(var(--space-3) + var(--safe-left));
-    right: calc(var(--space-3) + var(--safe-right));
-    bottom: calc(5.8rem + var(--safe-bottom));
-    width: auto;
-    max-height: 34vh;
-    overflow: auto;
+    z-index: 24;
+    max-width: calc(100vw - 5.5rem - var(--safe-left) - var(--safe-right));
   }
 
-  .brand {
-    max-width: min(260px, calc(100vw - 8rem));
-    padding: var(--space-3);
+  /* Journey as bottom sheet — reopen via FAB */
+  .rail {
+    left: 0;
+    right: 0;
+    top: auto;
+    bottom: 0;
+    width: 100%;
+    max-width: none;
+    max-height: min(58dvh, 520px);
+    padding: var(--space-2) var(--space-3) calc(var(--space-3) + var(--safe-bottom));
+    border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
+    z-index: 30;
+    box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.28);
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
-  .brand__name {
+  .rail::before {
+    content: '';
+    display: block;
+    width: 36px;
+    height: 5px;
+    margin: 2px auto 10px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--ink) 22%, transparent);
+    flex-shrink: 0;
+  }
+
+  .rail .brand--rail {
+    padding-top: 0;
+    padding-bottom: var(--space-2);
+  }
+
+  .rail .brand__name {
     font-size: var(--text-title2);
+  }
+
+  .rail .brand__tag {
+    margin-top: var(--space-1);
+  }
+
+  .rail .timeline {
+    flex: 0 0 auto;
+    overflow: visible;
+    max-height: none;
+  }
+
+  .rail .rail__foot {
+    margin-top: var(--space-2);
+  }
+
+  .rail__fold svg {
+    transform: rotate(-90deg);
   }
 
   .badge {
@@ -2908,6 +2987,7 @@ html.is-route-editing .maplibregl-canvas-container:active {
     bottom: calc(var(--space-2) + var(--safe-bottom));
     width: min(680px, calc(100vw - var(--space-3) - var(--safe-left) - var(--safe-right)));
     padding: var(--space-3);
+    z-index: 22;
   }
 
   .hud__hint {
@@ -2919,10 +2999,22 @@ html.is-route-editing .maplibregl-canvas-container:active {
     padding: var(--space-1) var(--space-2);
   }
 
-  .topbar {
-    padding: calc(var(--space-3) + var(--safe-top)) calc(var(--space-3) + var(--safe-right)) 0
-      calc(var(--space-3) + var(--safe-left));
-    justify-content: space-between;
+  body.is-rail-open .hud {
+    opacity: 0.35;
+    pointer-events: none;
+  }
+
+  /* Avoid rail flash before JS picks map-first default */
+  html:not(.is-ui-ready) .rail {
+    display: none !important;
+  }
+
+  html:not(.is-ui-ready) .rail-fab {
+    display: inline-flex !important;
+  }
+
+  html:not(.is-ui-ready) .rail-scrim {
+    display: none !important;
   }
 }
 
@@ -3326,6 +3418,18 @@ html.is-route-editing .maplibregl-canvas-container:active {
 .places-editor {
   right: calc(var(--space-4) + var(--safe-right));
   top: calc(var(--space-4) + var(--safe-top));
+}
+
+@media (max-width: 900px) {
+  .car-picker,
+  .places-editor {
+    top: auto !important;
+    bottom: calc(5.5rem + var(--safe-bottom)) !important;
+    right: calc(var(--space-2) + var(--safe-right)) !important;
+    left: calc(var(--space-2) + var(--safe-left)) !important;
+    width: auto !important;
+    max-height: min(58dvh, 520px) !important;
+  }
 }
 
 .boot {

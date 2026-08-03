@@ -957,14 +957,21 @@ export function fitJourney(map, padding) {
 
 export function getPadding() {
   const hudCompact = document.getElementById('hud')?.classList.contains('is-compact');
-  const railCollapsed = document.getElementById('rail')?.classList.contains('is-collapsed');
+  const rail = document.getElementById('rail');
+  const railOpen = Boolean(rail) && !rail.hidden && !rail.classList.contains('is-collapsed');
   if (window.innerWidth < 900) {
-    return { top: 110, bottom: hudCompact ? 200 : 300, left: 20, right: 20 };
+    return {
+      top: 72,
+      // Keep framing tight so the journey fills the phone map; sheet covers map when open.
+      bottom: railOpen ? Math.round(Math.min(window.innerHeight * 0.34, 260)) : hudCompact ? 100 : 148,
+      left: 16,
+      right: 68,
+    };
   }
   return {
     top: 100,
     bottom: hudCompact ? 108 : 148,
-    left: railCollapsed ? 88 : 360,
+    left: railOpen ? 360 : 88,
     right: 40,
   };
 }
