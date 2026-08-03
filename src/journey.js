@@ -23,6 +23,12 @@
  * }} Stop
  */
 
+/** Resolve public assets for both local, custom domain, and GitHub Pages subpath. */
+function asset(path) {
+  const base = import.meta.env.BASE_URL || './';
+  return `${base}${String(path).replace(/^\//, '')}`;
+}
+
 /** @type {Stop[]} */
 export const stops = [
   {
@@ -44,9 +50,9 @@ export const stops = [
     reviews: 34,
     address: '897 Giải Phóng, Hoàng Mai, Hà Nội',
     photos: [
-      { src: '/photos/xuat-phat/1.jpg', caption: 'Southern Star · ngoại thất ngày' },
-      { src: '/photos/xuat-phat/2.jpg', caption: 'Tổng thể & vườn trên cao' },
-      { src: '/photos/xuat-phat/3.jpg', caption: 'Bể bơi tiện ích' },
+      { src: asset('photos/xuat-phat/1.jpg'), caption: 'Southern Star · ngoại thất ngày' },
+      { src: asset('photos/xuat-phat/2.jpg'), caption: 'Tổng thể & vườn trên cao' },
+      { src: asset('photos/xuat-phat/3.jpg'), caption: 'Bể bơi tiện ích' },
     ],
   },
   {
@@ -71,9 +77,9 @@ export const stops = [
     hours: 'Mở 24 giờ',
     phone: '+84 977 226 183',
     photos: [
-      { src: '/photos/nghi-duong/1.jpg', caption: 'Homestay dưới chân núi' },
-      { src: '/photos/nghi-duong/2.jpg', caption: 'Suối Kẹm trong veo' },
-      { src: '/photos/nghi-duong/3.jpg', caption: 'Mâm cơm đặc sản' },
+      { src: asset('photos/nghi-duong/1.jpg'), caption: 'Homestay dưới chân núi' },
+      { src: asset('photos/nghi-duong/2.jpg'), caption: 'Suối Kẹm trong veo' },
+      { src: asset('photos/nghi-duong/3.jpg'), caption: 'Mâm cơm đặc sản' },
     ],
   },
   {
@@ -97,9 +103,9 @@ export const stops = [
     hours: 'Đang mở · Đóng 22:00',
     phone: '+84 989 679 669',
     photos: [
-      { src: '/photos/tra-chieu/1.jpg', caption: 'Hoàng hôn trên hồ Núi Cốc' },
-      { src: '/photos/tra-chieu/2.jpg', caption: 'Toàn cảnh hồ & đảo' },
-      { src: '/photos/tra-chieu/3.jpg', caption: 'View đồi trà ven hồ' },
+      { src: asset('photos/tra-chieu/1.jpg'), caption: 'Hoàng hôn trên hồ Núi Cốc' },
+      { src: asset('photos/tra-chieu/2.jpg'), caption: 'Toàn cảnh hồ & đảo' },
+      { src: asset('photos/tra-chieu/3.jpg'), caption: 'View đồi trà ven hồ' },
     ],
   },
   {
@@ -122,9 +128,9 @@ export const stops = [
     hours: 'Đang mở · Đóng 17:30',
     phone: '+84 973 578 130',
     photos: [
-      { src: '/photos/mua-qua/1.jpg', caption: 'Đồi matcha Lạc Yên' },
-      { src: '/photos/mua-qua/2.jpg', caption: 'Trà & matcha mang về' },
-      { src: '/photos/mua-qua/3.jpg', caption: 'Kẹo lạc đặc sản' },
+      { src: asset('photos/mua-qua/1.jpg'), caption: 'Đồi matcha Lạc Yên' },
+      { src: asset('photos/mua-qua/2.jpg'), caption: 'Trà & matcha mang về' },
+      { src: asset('photos/mua-qua/3.jpg'), caption: 'Kẹo lạc đặc sản' },
     ],
   },
 ];
