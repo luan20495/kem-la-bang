@@ -1,7 +1,7 @@
 import gsap from 'gsap';
 import { Popup } from 'maplibre-gl';
 import { stops, trip } from './journey.js';
-import { buildAllLegs, buildCinemaPath, byId, selectLegAlternative } from './routing.js';
+import { buildAllLegs, buildCinemaPath, byId, selectLegAlternative, CORRIDOR_BLURB } from './routing.js';
 import {
   createMap,
   waitForMap,
@@ -107,16 +107,7 @@ function corridorOptions(builtLegs) {
   return primary.alternatives
     .filter((alt) => !removed.has(alt.tag))
     .map((alt, index) => {
-    const short =
-      alt.tag === 'Nhanh nhất'
-        ? 'Nhanh nhất'
-        : alt.tag === 'Qua Cầu Thanh Trì'
-          ? 'Thanh Trì'
-          : alt.tag === 'Qua Cầu Vĩnh Tuy'
-            ? 'Vĩnh Tuy'
-            : alt.tag === 'Qua Vành đai 3'
-              ? 'Vành đai 3'
-              : alt.tag.replace(/^Qua\s+/i, '');
+    const short = alt.tag;
     const go = choosable.find((l) => !l.return);
     const back = choosable.find((l) => l.return);
     const goAlt = go?.alternatives?.find((a) => a.tag === alt.tag);
@@ -130,6 +121,7 @@ function corridorOptions(builtLegs) {
     return {
       tag: alt.tag,
       short,
+      blurb: CORRIDOR_BLURB[alt.tag] || '',
       index,
       summary: parts.join(' · '),
       time: timeParts.join(' → '),
@@ -146,7 +138,8 @@ const REMOVED_KEY = 'kem-removed-corridors';
 function getRemovedCorridors() {
   try {
     const raw = JSON.parse(localStorage.getItem(REMOVED_KEY) || '[]');
-    return new Set(Array.isArray(raw) ? raw : []);
+    const valid = new Set(Object.keys(CORRIDOR_BLURB));
+    return new Set((Array.isArray(raw) ? raw : []).filter((t) => valid.has(t)));
   } catch {
     return new Set();
   }
@@ -220,9 +213,10 @@ function renderRoutePicker(builtLegs, handlers = {}) {
     ${
       active
         ? `<p class="route-seg__meta">
-            <span class="route-seg__sum">${active.summary}</span>
-            <span class="route-seg__time">${active.time}</span>
-          </p>`
+            <span class="route-seg__sum">${active.blurb || active.summary}</span>
+            <span class="route-seg__time">${active.time || active.summary}</span>
+          </p>
+          <p class="route-seg__km">${active.summary}</p>`
         : ''
     }
     <div class="route-seg__tools">

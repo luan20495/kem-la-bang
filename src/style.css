@@ -401,7 +401,7 @@ html[data-grade='dawn'] .grade {
 
 .route-seg {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 0.3rem;
   padding: 0.22rem;
   border-radius: 0.85rem;
@@ -528,6 +528,12 @@ html[data-grade='dawn'] .grade {
 }
 
 .route-seg__time {
+  font-size: 0.7rem;
+  color: var(--ink-soft);
+}
+
+.route-seg__km {
+  margin: 0.2rem 0.15rem 0;
   font-size: 0.7rem;
   color: var(--ink-soft);
 }

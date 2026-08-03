@@ -6,76 +6,48 @@ const byId = Object.fromEntries(stops.map((s) => [s.id, s]));
 const LEG_VIAS = {
   'xuat-phat>nghi-duong': [
     {
-      tag: 'Qua Cầu Vĩnh Tuy',
+      tag: 'Thông thoáng',
       points: [
-        { lng: 105.8698, lat: 21.002 },
+        { lng: 105.8835, lat: 20.9678 }, // Thanh Trì — tránh nội đô
+        { lng: 105.92, lat: 21.08 },
+      ],
+    },
+    {
+      tag: 'Cao tốc',
+      points: [
+        { lng: 105.8698, lat: 21.002 }, // Vĩnh Tuy
         { lng: 105.895, lat: 21.02 },
-        { lng: 105.938, lat: 21.118 },
-      ],
-    },
-    {
-      tag: 'Qua Cầu Thanh Trì',
-      points: [
-        { lng: 105.8835, lat: 20.9678 },
-        { lng: 105.938, lat: 21.118 },
-      ],
-    },
-    {
-      tag: 'Qua Vành đai 3',
-      points: [
-        { lng: 105.875, lat: 20.955 },
-        { lng: 105.9, lat: 21.05 },
-        { lng: 105.938, lat: 21.118 },
-      ],
-    },
-    { lng: 105.848, lat: 21.594, tag: 'Qua Thái Nguyên' },
-    { lng: 105.72, lat: 21.42, tag: 'Qua Phổ Yên' },
-    {
-      tag: 'Qua Sóc Sơn',
-      points: [
-        { lng: 105.848, lat: 21.26 },
-        { lng: 105.82, lat: 21.45 },
+        { lng: 105.938, lat: 21.118 }, // CT07
       ],
     },
   ],
   'mua-qua>xuat-phat': [
     {
-      tag: 'Qua Cầu Vĩnh Tuy',
+      tag: 'Thông thoáng',
+      points: [
+        { lng: 105.92, lat: 21.08 },
+        { lng: 105.8835, lat: 20.9678 },
+      ],
+    },
+    {
+      tag: 'Cao tốc',
       points: [
         { lng: 105.938, lat: 21.118 },
         { lng: 105.895, lat: 21.02 },
         { lng: 105.8698, lat: 21.002 },
       ],
     },
-    {
-      tag: 'Qua Cầu Thanh Trì',
-      points: [
-        { lng: 105.938, lat: 21.118 },
-        { lng: 105.8835, lat: 20.9678 },
-      ],
-    },
-    {
-      tag: 'Qua Vành đai 3',
-      points: [
-        { lng: 105.938, lat: 21.118 },
-        { lng: 105.9, lat: 21.05 },
-        { lng: 105.875, lat: 20.955 },
-      ],
-    },
-    { lng: 105.848, lat: 21.594, tag: 'Qua Thái Nguyên' },
-    { lng: 105.72, lat: 21.42, tag: 'Qua Phổ Yên' },
-    {
-      tag: 'Qua Sóc Sơn',
-      points: [
-        { lng: 105.82, lat: 21.45 },
-        { lng: 105.848, lat: 21.26 },
-      ],
-    },
   ],
 };
 
-/** Soft default — user can change anytime in the picker. */
-const DEFAULT_CORRIDOR = 'Qua Cầu Vĩnh Tuy';
+/** Soft default — thông thoáng matches the trip vibe; user can switch. */
+const DEFAULT_CORRIDOR = 'Thông thoáng';
+
+const CORRIDOR_BLURB = {
+  'Nhanh nhất': 'Ngắn nhất · tới nơi sớm nhất',
+  'Thông thoáng': 'Ít kẹt · đường rộng, chạy êm',
+  'Cao tốc': 'Bám CT07 · ưu tiên cao tốc',
+};
 
 function formatKm(meters) {
   return `${(meters / 1000).toFixed(0)} km`;
@@ -243,22 +215,21 @@ export async function fetchLegAlternatives(from, to, legKey) {
   const baked = await loadAllBakedCorridors(legKey);
   collected.push(...baked);
 
-  // 2) Live OSRM direct + named vias (fallback / refresh)
-  try {
-    const direct = await fetchOsrmOnce([from, to]);
-    if (direct[0]) {
-      collected.push({
-        ...direct[0],
-        tag: 'Nhanh nhất',
-        preserveTag: true,
-        source: 'osrm-direct',
-      });
+  // 2) Live OSRM direct as Nhanh nhất (if not already baked)
+  if (!collected.some((r) => r.tag === 'Nhanh nhất')) {
+    try {
+      const direct = await fetchOsrmOnce([from, to]);
+      if (direct[0]) {
+        collected.push({
+          ...direct[0],
+          tag: 'Nhanh nhất',
+          preserveTag: true,
+          source: 'osrm-direct',
+        });
+      }
+    } catch {
+      /* continue */
     }
-    for (const extra of direct.slice(1)) {
-      collected.push({ ...extra, source: 'osrm-alt' });
-    }
-  } catch {
-    /* continue */
   }
 
   const vias = LEG_VIAS[legKey] || [];
@@ -285,12 +256,19 @@ export async function fetchLegAlternatives(from, to, legKey) {
     unique = [fallbackCurve(from, to)];
   }
 
-  // Stable menu order: default corridor, then by duration
+  // Fixed menu order: Nhanh nhất → Thông thoáng → Cao tốc
+  const order = ['Nhanh nhất', 'Thông thoáng', 'Cao tốc'];
   unique.sort((a, b) => {
-    if (a.tag === DEFAULT_CORRIDOR && b.tag !== DEFAULT_CORRIDOR) return -1;
-    if (b.tag === DEFAULT_CORRIDOR && a.tag !== DEFAULT_CORRIDOR) return 1;
+    const ia = order.indexOf(a.tag);
+    const ib = order.indexOf(b.tag);
+    if (ia >= 0 || ib >= 0) return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
     return a.duration - b.duration;
   });
+  // Keep only the three named styles (+ any leftover only if missing)
+  unique = unique.filter((r) => order.includes(r.tag)).slice(0, 3);
+  if (!unique.length) {
+    unique = [fallbackCurve(from, to)];
+  }
 
   unique = unique.map((r) => ({
     ...r,
@@ -413,4 +391,4 @@ function computeBearing(a, b) {
   return ((Math.atan2(y, x) * toDeg) + 360) % 360;
 }
 
-export { byId, formatKm, formatMins, DEFAULT_CORRIDOR };
+export { byId, formatKm, formatMins, DEFAULT_CORRIDOR, CORRIDOR_BLURB };
