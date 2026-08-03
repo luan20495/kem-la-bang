@@ -620,9 +620,10 @@ html[data-grade='dawn'] .grade {
   align-items: center;
   gap: var(--space-1);
   width: 60px;
-  padding: var(--space-2);
+  padding: 10px 8px 12px;
   border-radius: var(--radius-xl);
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .tb__btn {
@@ -631,7 +632,7 @@ html[data-grade='dawn'] .grade {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--space-1);
+  gap: 2px;
   width: var(--hit);
   height: var(--hit);
   min-width: var(--hit);
@@ -679,7 +680,7 @@ html[data-grade='dawn'] .grade {
   font-size: var(--text-caption2);
   font-weight: 590;
   letter-spacing: -0.01em;
-  line-height: 1;
+  line-height: 1.15;
   text-align: center;
   color: var(--ink-soft);
 }
@@ -870,7 +871,7 @@ html[data-grade='dawn'] .grade {
   font-size: var(--text-caption);
   font-weight: 590;
   letter-spacing: -0.01em;
-  color: var(--ink-soft);
+  color: color-mix(in srgb, var(--ink) 72%, transparent);
   transition:
     background 0.2s var(--ease),
     color 0.2s var(--ease),
@@ -974,11 +975,11 @@ html.is-route-editing .maplibregl-canvas-container:active {
 .route-seg {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 0.3rem;
-  padding: 0.22rem;
-  border-radius: 0.85rem;
-  background: rgba(11, 28, 36, 0.05);
-  box-shadow: inset 0 0 0 1px rgba(11, 28, 36, 0.05);
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border-radius: var(--radius-md);
+  background: var(--fill-tertiary);
+  box-shadow: none;
 }
 
 .route-seg__item {
@@ -989,14 +990,14 @@ html.is-route-editing .maplibregl-canvas-container:active {
 
 .route-seg__btn {
   flex: 1;
-  min-height: 2rem;
+  min-height: var(--control-h-sm);
   min-width: 0;
-  padding: 0.35rem 1.35rem 0.35rem 0.35rem;
-  border-radius: 0.65rem;
-  font-size: 0.72rem;
-  font-weight: 700;
+  padding: var(--space-2) 1.35rem var(--space-2) var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-caption);
+  font-weight: 590;
   letter-spacing: -0.01em;
-  color: var(--ink-soft);
+  color: color-mix(in srgb, var(--ink) 72%, transparent);
   transition:
     background 0.25s var(--ease),
     color 0.25s var(--ease),
@@ -1006,15 +1007,13 @@ html.is-route-editing .maplibregl-canvas-container:active {
 
 .route-seg__btn:hover {
   color: var(--ink);
-  background: rgba(255, 255, 255, 0.55);
+  background: color-mix(in srgb, var(--fill-secondary) 70%, transparent);
 }
 
 .route-seg__btn.is-on {
-  color: var(--forest);
-  background: rgba(255, 255, 255, 0.95);
-  box-shadow:
-    0 4px 12px rgba(12, 32, 40, 0.1),
-    0 0 0 1px rgba(15, 92, 74, 0.12);
+  color: var(--system-green);
+  background: var(--fill-secondary);
+  box-shadow: var(--shadow-soft);
 }
 
 .route-seg__del {
@@ -1030,7 +1029,7 @@ html.is-route-editing .maplibregl-canvas-container:active {
   font-weight: 700;
   line-height: 1;
   color: var(--ink-soft);
-  background: rgba(255, 255, 255, 0.75);
+  background: var(--fill-tertiary);
   opacity: 0.7;
   transition:
     opacity 0.2s var(--ease),
@@ -1044,8 +1043,8 @@ html.is-route-editing .maplibregl-canvas-container:active {
 }
 
 .route-seg__del:hover {
-  color: #b42318;
-  background: rgba(255, 236, 232, 0.95);
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
 }
 
 .route-seg__meta {
@@ -1069,11 +1068,11 @@ html.is-route-editing .maplibregl-canvas-container:active {
 
 .route-seg__gmaps {
   display: inline-block;
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: var(--forest);
+  font-size: var(--text-caption);
+  font-weight: 590;
+  color: var(--system-green);
   text-decoration: none;
-  border-bottom: 1px solid color-mix(in srgb, var(--forest) 35%, transparent);
+  border-bottom: var(--hairline) solid color-mix(in srgb, var(--system-green) 40%, transparent);
 }
 
 .route-seg__gmaps:hover {
@@ -1124,24 +1123,20 @@ html.is-route-editing .maplibregl-canvas-container:active {
 }
 
 .maps-cta {
-  --cta: var(--forest);
+  --cta: var(--system-green);
   position: relative;
   display: grid;
   grid-template-columns: 4.1rem 1fr auto;
   align-items: center;
-  gap: 0.7rem;
-  margin-top: 0.85rem;
-  padding: 0.55rem 0.6rem 0.55rem 0.55rem;
-  border-radius: 1rem;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  padding: var(--space-2);
+  border-radius: var(--radius-xl);
   text-decoration: none;
   color: var(--ink);
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(255, 250, 242, 0.78)),
-    linear-gradient(90deg, color-mix(in srgb, var(--cta) 18%, transparent), transparent 55%);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.7) inset,
-    0 10px 24px rgba(12, 32, 40, 0.1),
-    0 0 0 1px rgba(12, 32, 40, 0.08);
+  background: var(--fill-secondary);
+  border: var(--hairline) solid var(--line);
+  box-shadow: var(--shadow-soft);
   overflow: hidden;
   isolation: isolate;
   transition:
@@ -1172,10 +1167,7 @@ html.is-route-editing .maplibregl-canvas-container:active {
 
 .maps-cta:hover {
   transform: translateY(-2px);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.75) inset,
-    0 16px 32px rgba(12, 32, 40, 0.14),
-    0 0 0 1px color-mix(in srgb, var(--cta) 35%, rgba(12, 32, 40, 0.1));
+  box-shadow: var(--shadow);
 }
 
 .maps-cta:hover .maps-cta__go {
@@ -1192,10 +1184,10 @@ html.is-route-editing .maplibregl-canvas-container:active {
   position: relative;
   width: 4.1rem;
   height: 4.1rem;
-  border-radius: 0.75rem;
+  border-radius: var(--radius-md);
   overflow: hidden;
-  background: #d7e4ec;
-  box-shadow: 0 0 0 1px rgba(12, 32, 40, 0.06);
+  background: var(--fill-tertiary);
+  box-shadow: 0 0 0 var(--hairline) var(--line);
   flex-shrink: 0;
 }
 
@@ -1234,26 +1226,27 @@ html.is-route-editing .maplibregl-canvas-container:active {
 }
 
 .maps-cta__eyebrow {
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-size: var(--text-caption2);
+  font-weight: 590;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--tint);
 }
 
 .maps-cta__title {
   font-family: var(--font-display);
-  font-size: 1.02rem;
+  font-size: var(--text-headline);
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.15;
+  color: var(--ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .maps-cta__place {
-  font-size: 0.72rem;
+  font-size: var(--text-caption);
   color: var(--ink-soft);
   white-space: nowrap;
   overflow: hidden;
@@ -1261,13 +1254,13 @@ html.is-route-editing .maplibregl-canvas-container:active {
 }
 
 .maps-cta__go {
-  width: 2.15rem;
-  height: 2.15rem;
+  width: var(--hit);
+  height: var(--hit);
   display: grid;
   place-items: center;
-  border-radius: 999px;
-  color: var(--forest);
-  background: rgba(15, 92, 74, 0.1);
+  border-radius: var(--radius-md);
+  color: var(--cta);
+  background: color-mix(in srgb, var(--cta) 14%, transparent);
   transition:
     background 0.3s var(--ease),
     color 0.3s var(--ease),
@@ -1299,8 +1292,12 @@ html.is-route-editing .maplibregl-canvas-container:active {
   left: 0.55rem;
   top: 1.55rem;
   bottom: -0.35rem;
-  width: 2px;
-  background: linear-gradient(to bottom, rgba(15, 92, 74, 0.35), rgba(15, 92, 74, 0.08));
+  width: var(--hairline);
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--system-green) 45%, transparent),
+    color-mix(in srgb, var(--system-green) 8%, transparent)
+  );
 }
 
 .tl:last-child::before {
@@ -1315,13 +1312,13 @@ html.is-route-editing .maplibregl-canvas-container:active {
   height: 0.72rem;
   border-radius: 50%;
   background: var(--stop, var(--forest));
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--fill-secondary) 88%, transparent);
   transition: transform 0.25s var(--ease);
 }
 
 .tl.is-active .tl__dot {
   transform: scale(1.2);
-  box-shadow: 0 0 0 4px rgba(255, 194, 71, 0.45);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--sun) 40%, transparent);
 }
 
 .tl__btn {
@@ -1334,34 +1331,41 @@ html.is-route-editing .maplibregl-canvas-container:active {
 
 .tl__btn:hover,
 .tl.is-active .tl__btn {
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--fill-tertiary);
+}
+
+.tl.is-active .tl__btn {
+  background: var(--fill-secondary);
+  box-shadow: var(--shadow-soft);
+  color: var(--ink);
 }
 
 .tl__when {
   display: block;
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  font-size: var(--text-caption2);
+  font-weight: 590;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--ink-soft);
 }
 
 .tl__role {
   display: block;
-  margin-top: 0.15rem;
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--forest);
+  margin-top: var(--space-1);
+  font-size: var(--text-footnote);
+  font-weight: 590;
+  color: var(--system-green);
 }
 
 .tl__name {
   display: block;
-  margin-top: 0.1rem;
+  margin-top: var(--space-1);
   font-family: var(--font-display);
-  font-size: 1.05rem;
+  font-size: var(--text-headline);
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.2;
+  color: var(--ink);
 }
 
 /* Sheet */
@@ -2045,8 +2049,8 @@ html.is-route-editing .maplibregl-canvas-container:active {
   white-space: nowrap;
   padding: 4px 8px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.92);
-  border: var(--hairline, 0.5px) solid rgba(0, 0, 0, 0.06);
+  background: var(--fill-elevated);
+  border: var(--hairline, 0.5px) solid var(--line);
   box-shadow: var(--shadow-soft);
   font-family: var(--font-ui, inherit);
   font-size: 11px;
@@ -2095,10 +2099,8 @@ html.is-route-editing .maplibregl-canvas-container:active {
 .maplibregl-popup.place-card-wrap .maplibregl-popup-content {
   padding: 0;
   border-radius: 1rem;
-  background: rgba(255, 252, 247, 0.97);
-  box-shadow:
-    0 14px 36px rgba(12, 32, 40, 0.2),
-    0 0 0 1px rgba(12, 32, 40, 0.07);
+  background: var(--glass-strong);
+  box-shadow: var(--shadow);
   backdrop-filter: blur(12px);
   overflow: hidden;
 }
@@ -2119,7 +2121,7 @@ html.is-route-editing .maplibregl-canvas-container:active {
 }
 
 .maplibregl-popup.place-card-wrap .maplibregl-popup-tip {
-  border-top-color: rgba(255, 252, 247, 0.97);
+  border-top-color: var(--glass-strong);
 }
 
 .place-card {

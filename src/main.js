@@ -764,11 +764,15 @@ function initMusic() {
 }
 
 function choreographUI() {
+  // Clear any leftover per-button transforms from prior intros / HMR.
+  gsap.set('.tb .tb__btn', { clearProps: 'transform,opacity,translate' });
   const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
-  tl.from('.rail', { x: -40, opacity: 0, duration: 0.95 }, 0)
-    .from('.tb .tb__btn', { y: 14, opacity: 0, duration: 0.55, stagger: 0.05 }, 0.12)
-    .from('.brand--mobile', { y: 24, opacity: 0, duration: 0.8 }, 0)
-    .from('.hud', { y: 30, opacity: 0, duration: 0.8 }, 0.3);
+  tl.from('.rail', { x: -40, opacity: 0, duration: 0.95, clearProps: 'transform' }, 0)
+    // Animate the whole toolbar — per-button y transforms spill outside the glass
+    // (backdrop-filter clips to border-radius) and can leave "Sửa" cut off if interrupted.
+    .from('.tb', { y: 14, opacity: 0, duration: 0.55, clearProps: 'transform' }, 0.12)
+    .from('.brand--mobile', { y: 24, opacity: 0, duration: 0.8, clearProps: 'transform' }, 0)
+    .from('.hud', { y: 30, opacity: 0, duration: 0.8, clearProps: 'transform' }, 0.3);
 }
 
 function finishBoot() {
