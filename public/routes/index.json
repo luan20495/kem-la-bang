@@ -1,0 +1,52 @@
+{
+  "corridors": [
+    {
+      "tag": "Qua Cầu Vĩnh Tuy",
+      "slug": "qua-cau-vinh-tuy",
+      "go": "routes/go-qua-cau-vinh-tuy.json",
+      "back": "routes/back-qua-cau-vinh-tuy.json",
+      "goKm": 131.1,
+      "goMin": 130
+    },
+    {
+      "tag": "Qua Cầu Thanh Trì",
+      "slug": "qua-cau-thanh-tri",
+      "go": "routes/go-qua-cau-thanh-tri.json",
+      "back": "routes/back-qua-cau-thanh-tri.json",
+      "goKm": 133.4,
+      "goMin": 127
+    },
+    {
+      "tag": "Qua Vành đai 3",
+      "slug": "qua-vanh-dai-3",
+      "go": "routes/go-qua-vanh-dai-3.json",
+      "back": "routes/back-qua-vanh-dai-3.json",
+      "goKm": 139.9,
+      "goMin": 144
+    },
+    {
+      "tag": "Qua Thái Nguyên",
+      "slug": "qua-thai-nguyen",
+      "go": "routes/go-qua-thai-nguyen.json",
+      "back": "routes/back-qua-thai-nguyen.json",
+      "goKm": 119.8,
+      "goMin": 107
+    },
+    {
+      "tag": "Qua Phổ Yên",
+      "slug": "qua-pho-yen",
+      "go": "routes/go-qua-pho-yen.json",
+      "back": "routes/back-qua-pho-yen.json",
+      "goKm": 121.1,
+      "goMin": 160
+    },
+    {
+      "tag": "Qua Sóc Sơn",
+      "slug": "qua-soc-son",
+      "go": "routes/go-qua-soc-son.json",
+      "back": "routes/back-qua-soc-son.json",
+      "goKm": 118.1,
+      "goMin": 122
+    }
+  ]
+}

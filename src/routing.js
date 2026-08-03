@@ -2,15 +2,15 @@ import { stops, legs } from './journey.js';
 
 const byId = Object.fromEntries(stops.map((s) => [s.id, s]));
 
-/** Optional via-points to invent distinct corridors when OSRM returns few alts. */
+/** Live via probes when baked corridors are unavailable. */
 const LEG_VIAS = {
   'xuat-phat>nghi-duong': [
     {
       tag: 'Qua Cầu Vĩnh Tuy',
       points: [
-        { lng: 105.8698, lat: 21.002 }, // Cầu Vĩnh Tuy
-        { lng: 105.895, lat: 21.02 }, // bờ đông sau cầu
-        { lng: 105.938, lat: 21.118 }, // CT Hà Nội – Thái Nguyên
+        { lng: 105.8698, lat: 21.002 },
+        { lng: 105.895, lat: 21.02 },
+        { lng: 105.938, lat: 21.118 },
       ],
     },
     {
@@ -20,7 +20,23 @@ const LEG_VIAS = {
         { lng: 105.938, lat: 21.118 },
       ],
     },
+    {
+      tag: 'Qua Vành đai 3',
+      points: [
+        { lng: 105.875, lat: 20.955 },
+        { lng: 105.9, lat: 21.05 },
+        { lng: 105.938, lat: 21.118 },
+      ],
+    },
+    { lng: 105.848, lat: 21.594, tag: 'Qua Thái Nguyên' },
     { lng: 105.72, lat: 21.42, tag: 'Qua Phổ Yên' },
+    {
+      tag: 'Qua Sóc Sơn',
+      points: [
+        { lng: 105.848, lat: 21.26 },
+        { lng: 105.82, lat: 21.45 },
+      ],
+    },
   ],
   'mua-qua>xuat-phat': [
     {
@@ -38,17 +54,28 @@ const LEG_VIAS = {
         { lng: 105.8835, lat: 20.9678 },
       ],
     },
+    {
+      tag: 'Qua Vành đai 3',
+      points: [
+        { lng: 105.938, lat: 21.118 },
+        { lng: 105.9, lat: 21.05 },
+        { lng: 105.875, lat: 20.955 },
+      ],
+    },
+    { lng: 105.848, lat: 21.594, tag: 'Qua Thái Nguyên' },
     { lng: 105.72, lat: 21.42, tag: 'Qua Phổ Yên' },
+    {
+      tag: 'Qua Sóc Sơn',
+      points: [
+        { lng: 105.82, lat: 21.45 },
+        { lng: 105.848, lat: 21.26 },
+      ],
+    },
   ],
 };
 
-const PREFERRED_CORRIDOR = 'Qua Cầu Vĩnh Tuy';
-
-/** Baked corridors inspired by Google Maps (CT07 via Vĩnh Tuy). */
-const BAKED_CORRIDORS = {
-  'xuat-phat>nghi-duong': 'routes/xuat-phat-nghi-duong-vinh-tuy.json',
-  'mua-qua>xuat-phat': 'routes/mua-qua-xuat-phat-vinh-tuy.json',
-};
+/** Soft default — user can change anytime in the picker. */
+const DEFAULT_CORRIDOR = 'Qua Cầu Vĩnh Tuy';
 
 function formatKm(meters) {
   return `${(meters / 1000).toFixed(0)} km`;
@@ -66,7 +93,7 @@ async function fetchOsrmOnce(coords) {
   const path = coords.map((c) => `${c.lng},${c.lat}`).join(';');
   const url = `https://router.project-osrm.org/route/v1/driving/${path}?overview=full&geometries=geojson&alternatives=true&steps=false`;
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 6000);
+  const timer = setTimeout(() => ctrl.abort(), 8000);
   try {
     const res = await fetch(url, { signal: ctrl.signal });
     if (!res.ok) throw new Error('OSRM failed');
@@ -124,12 +151,18 @@ function routeKey(r) {
 }
 
 function dedupeRoutes(list) {
-  const seen = new Set();
+  const seenTag = new Set();
+  const seenGeom = new Set();
   const out = [];
   for (const r of list) {
-    const k = routeKey(r);
-    if (seen.has(k)) continue;
-    seen.add(k);
+    if (r.tag) {
+      if (seenTag.has(r.tag)) continue;
+      seenTag.add(r.tag);
+    } else {
+      const k = routeKey(r);
+      if (seenGeom.has(k)) continue;
+      seenGeom.add(k);
+    }
     out.push(r);
   }
   return out;
@@ -137,21 +170,13 @@ function dedupeRoutes(list) {
 
 function labelAlternatives(routes) {
   const byDuration = [...routes].sort((a, b) => a.duration - b.duration);
-  const byDistance = [...routes].sort((a, b) => a.distance - b.distance);
   const fastest = byDuration[0];
-  const shortest = byDistance[0];
 
   return routes.map((r, i) => {
     let tag = r.tag || `Tuyến ${i + 1}`;
-    if (r.preserveTag && r.tag) {
-      tag = r.tag;
-    } else if (r === fastest) {
-      tag = 'Nhanh nhất';
-    } else if (r === shortest && shortest !== fastest) {
-      tag = 'Ngắn nhất';
-    } else if (r.tag) {
-      tag = r.tag;
-    }
+    if (r.preserveTag && r.tag) tag = r.tag;
+    else if (!r.tag && r === fastest) tag = 'Nhanh nhất';
+    else if (r.tag) tag = r.tag;
     return {
       ...r,
       id: i,
@@ -163,12 +188,24 @@ function labelAlternatives(routes) {
   });
 }
 
-async function loadBakedCorridor(legKey) {
-  const file = BAKED_CORRIDORS[legKey];
-  if (!file) return null;
+function assetUrl(path) {
+  const base = import.meta.env.BASE_URL || './';
+  return `${base}${String(path).replace(/^\//, '')}`;
+}
+
+async function loadBakedIndex() {
   try {
-    const base = import.meta.env.BASE_URL || './';
-    const res = await fetch(`${base}${file}`);
+    const res = await fetch(assetUrl('routes/index.json'));
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
+async function loadBakedFile(path) {
+  try {
+    const res = await fetch(assetUrl(path));
     if (!res.ok) return null;
     const data = await res.json();
     if (!data?.coordinates?.length) return null;
@@ -176,31 +213,57 @@ async function loadBakedCorridor(legKey) {
       coordinates: data.coordinates,
       distance: data.distance,
       duration: data.duration,
-      tag: data.tag || PREFERRED_CORRIDOR,
+      tag: data.tag,
       preserveTag: true,
-      source: data.source || 'google-maps-inspired',
-      mapsUrl: data.mapsUrl,
+      source: data.source || 'baked-corridor',
     };
   } catch {
     return null;
   }
 }
 
+/** Load every named corridor for a leg (go or back). */
+async function loadAllBakedCorridors(legKey) {
+  const index = await loadBakedIndex();
+  if (!index?.corridors?.length) return [];
+  const isReturn = legKey.startsWith('mua-qua>');
+  const out = [];
+  for (const item of index.corridors) {
+    const path = isReturn ? item.back : item.go;
+    const baked = await loadBakedFile(path);
+    if (baked) out.push(baked);
+  }
+  return out;
+}
+
 export async function fetchLegAlternatives(from, to, legKey) {
   const collected = [];
 
-  const baked = await loadBakedCorridor(legKey);
-  if (baked) collected.push(baked);
+  // 1) All precomputed corridors (user picks later)
+  const baked = await loadAllBakedCorridors(legKey);
+  collected.push(...baked);
 
+  // 2) Live OSRM direct + named vias (fallback / refresh)
   try {
     const direct = await fetchOsrmOnce([from, to]);
-    collected.push(...direct);
+    if (direct[0]) {
+      collected.push({
+        ...direct[0],
+        tag: 'Nhanh nhất',
+        preserveTag: true,
+        source: 'osrm-direct',
+      });
+    }
+    for (const extra of direct.slice(1)) {
+      collected.push({ ...extra, source: 'osrm-alt' });
+    }
   } catch {
     /* continue */
   }
 
   const vias = LEG_VIAS[legKey] || [];
   for (const via of vias) {
+    if (collected.some((r) => r.tag === via.tag)) continue;
     try {
       const mids = via.points || [{ lng: via.lng, lat: via.lat }];
       const viaRoutes = await fetchOsrmOnce([from, ...mids, to]);
@@ -208,7 +271,8 @@ export async function fetchLegAlternatives(from, to, legKey) {
         collected.push({
           ...viaRoutes[0],
           tag: via.tag,
-          preserveTag: via.tag === PREFERRED_CORRIDOR,
+          preserveTag: true,
+          source: 'osrm-via',
         });
       }
     } catch {
@@ -221,14 +285,12 @@ export async function fetchLegAlternatives(from, to, legKey) {
     unique = [fallbackCurve(from, to)];
   }
 
-  // Preferred / baked corridor first, then by duration
-  const preferred = unique.filter(
-    (r) => r.tag === PREFERRED_CORRIDOR || r.preserveTag || r.source === 'google-maps-inspired'
-  );
-  const rest = unique
-    .filter((r) => !preferred.includes(r))
-    .sort((a, b) => a.duration - b.duration);
-  unique = [...preferred, ...rest].slice(0, 3);
+  // Stable menu order: default corridor, then by duration
+  unique.sort((a, b) => {
+    if (a.tag === DEFAULT_CORRIDOR && b.tag !== DEFAULT_CORRIDOR) return -1;
+    if (b.tag === DEFAULT_CORRIDOR && a.tag !== DEFAULT_CORRIDOR) return 1;
+    return a.duration - b.duration;
+  });
 
   unique = unique.map((r) => ({
     ...r,
@@ -245,12 +307,7 @@ export async function buildAllLegs() {
     const legKey = `${leg.from}>${leg.to}`;
     try {
       const alternatives = await fetchLegAlternatives(from, to, legKey);
-      const preferIdx = alternatives.findIndex(
-        (a) =>
-          a.tag === PREFERRED_CORRIDOR ||
-          a.source === 'google-maps-inspired' ||
-          a.preserveTag
-      );
+      const preferIdx = alternatives.findIndex((a) => a.tag === DEFAULT_CORRIDOR);
       const selected = preferIdx >= 0 ? preferIdx : 0;
       const chosen = alternatives[selected];
       built.push({
@@ -264,7 +321,7 @@ export async function buildAllLegs() {
     } catch {
       const fb = fallbackCurve(from, to);
       fb.coordinates = pinStops(fb.coordinates, from, to);
-      const alternatives = labelAlternatives([fb]);
+      const alternatives = labelAlternatives([{ ...fb, preserveTag: true, tag: 'Dự phòng' }]);
       built.push({
         ...leg,
         alternatives,
@@ -356,4 +413,4 @@ function computeBearing(a, b) {
   return ((Math.atan2(y, x) * toDeg) + 360) % 360;
 }
 
-export { byId, formatKm, formatMins };
+export { byId, formatKm, formatMins, DEFAULT_CORRIDOR };

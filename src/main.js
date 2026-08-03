@@ -102,7 +102,6 @@ function corridorOptions(builtLegs) {
   const choosable = builtLegs.filter((leg) => (leg.alternatives?.length || 0) > 1);
   if (!choosable.length) return [];
 
-  // Use the first long-haul leg as the “menu” of corridors
   const primary = choosable.find((l) => !l.return) || choosable[0];
   return primary.alternatives.map((alt, index) => {
     const short =
@@ -112,7 +111,9 @@ function corridorOptions(builtLegs) {
           ? 'Thanh Trì'
           : alt.tag === 'Qua Cầu Vĩnh Tuy'
             ? 'Vĩnh Tuy'
-            : alt.tag.replace(/^Qua\s+/i, '');
+            : alt.tag === 'Qua Vành đai 3'
+              ? 'Vành đai 3'
+              : alt.tag.replace(/^Qua\s+/i, '');
     const go = choosable.find((l) => !l.return);
     const back = choosable.find((l) => l.return);
     const goAlt = go?.alternatives?.find((a) => a.tag === alt.tag) || go?.alternatives?.[index];
@@ -160,19 +161,19 @@ function renderRoutePicker(builtLegs, onPickCorridor) {
 
   if (label) {
     label.hidden = false;
-    label.textContent = 'Tuyến đường';
+    label.textContent = `Tuyến lên Kẹm · ${options.length} lựa chọn`;
   }
 
   const active = options.find((o) => o.selected) || options[0];
   const gmaps =
     'https://www.google.com/maps/dir/?api=1&origin=20.9794135,105.8415574&destination=21.6227277,105.534959&travelmode=driving';
   host.innerHTML = `
-    <div class="route-seg" role="radiogroup" aria-label="Chọn hành lang">
+    <div class="route-seg" role="radiogroup" aria-label="Chọn tuyến lên Kẹm">
       ${options
         .map(
           (o) => `
         <button type="button" class="route-seg__btn ${o.selected ? 'is-on' : ''}"
-          role="radio" aria-checked="${o.selected}" data-tag="${o.tag}">
+          role="radio" aria-checked="${o.selected}" data-tag="${o.tag}" title="${o.tag}">
           ${o.short}
         </button>`
         )
@@ -183,7 +184,7 @@ function renderRoutePicker(builtLegs, onPickCorridor) {
       <span class="route-seg__time">${active.time}</span>
     </p>
     <a class="route-seg__gmaps" href="${gmaps}" target="_blank" rel="noopener noreferrer">
-      Tham khảo Google Maps · CT07
+      So với Google Maps
     </a>
   `;
 
