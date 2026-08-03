@@ -5,14 +5,18 @@ const byId = Object.fromEntries(stops.map((s) => [s.id, s]));
 /** Optional via-points to invent distinct corridors when OSRM returns few alts. */
 const LEG_VIAS = {
   'xuat-phat>nghi-duong': [
+    { lng: 105.8698, lat: 21.002, tag: 'Qua Cầu Vĩnh Tuy' },
     { lng: 105.848, lat: 21.594, tag: 'Qua Thái Nguyên' },
     { lng: 105.72, lat: 21.42, tag: 'Qua Phổ Yên' },
   ],
   'mua-qua>xuat-phat': [
+    { lng: 105.8698, lat: 21.002, tag: 'Qua Cầu Vĩnh Tuy' },
     { lng: 105.848, lat: 21.594, tag: 'Qua Thái Nguyên' },
     { lng: 105.72, lat: 21.42, tag: 'Qua Phổ Yên' },
   ],
 };
+
+const PREFERRED_CORRIDOR = 'Qua Cầu Vĩnh Tuy';
 
 function formatKm(meters) {
   return `${(meters / 1000).toFixed(0)} km`;
@@ -148,9 +152,14 @@ export async function fetchLegAlternatives(from, to, legKey) {
     unique = [fallbackCurve(from, to)];
   }
 
-  // Prefer up to 3 options, sorted by duration
   unique.sort((a, b) => a.duration - b.duration);
-  unique = unique.slice(0, 3).map((r) => ({
+
+  // Keep preferred corridor even if not among the 3 fastest
+  const preferred = unique.filter((r) => r.tag === PREFERRED_CORRIDOR);
+  const rest = unique.filter((r) => r.tag !== PREFERRED_CORRIDOR);
+  unique = [...preferred, ...rest].slice(0, 3);
+
+  unique = unique.map((r) => ({
     ...r,
     coordinates: pinStops(r.coordinates, from, to),
   }));
@@ -165,11 +174,13 @@ export async function buildAllLegs() {
     const legKey = `${leg.from}>${leg.to}`;
     try {
       const alternatives = await fetchLegAlternatives(from, to, legKey);
-      const chosen = alternatives[0];
+      const preferIdx = alternatives.findIndex((a) => a.tag === PREFERRED_CORRIDOR);
+      const selected = preferIdx >= 0 ? preferIdx : 0;
+      const chosen = alternatives[selected];
       built.push({
         ...leg,
         alternatives,
-        selected: 0,
+        selected,
         coordinates: chosen.coordinates,
         distance: chosen.distance,
         duration: chosen.duration,
