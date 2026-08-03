@@ -24,13 +24,17 @@
  */
 
 /** Resolve public assets for both local, custom domain, and GitHub Pages subpath. */
-function asset(path) {
+export function asset(path) {
   const base = import.meta.env.BASE_URL || './';
   return `${base}${String(path).replace(/^\//, '')}`;
 }
 
+function clone(v) {
+  return JSON.parse(JSON.stringify(v));
+}
+
 /** @type {Stop[]} */
-export const stops = [
+const DEFAULT_STOPS = [
   {
     id: 'xuat-phat',
     order: 1,
@@ -135,6 +139,28 @@ export const stops = [
   },
 ];
 
+const DEFAULT_LEGS = [
+  { from: 'xuat-phat', to: 'nghi-duong', label: 'Xuất phát → Homestay', longHaul: true },
+  { from: 'nghi-duong', to: 'tra-chieu', label: 'Homestay → Trà chiều' },
+  { from: 'tra-chieu', to: 'nghi-duong', label: 'Trà chiều → về Homestay', overnight: true },
+  { from: 'nghi-duong', to: 'mua-qua', label: 'Homestay → Mua quả' },
+  { from: 'mua-qua', to: 'xuat-phat', label: 'Về Hà Nội', return: true, longHaul: true },
+];
+
+/** Live stop list — mutated by the place editor / localStorage hydrate. */
+export const stops = clone(DEFAULT_STOPS);
+
+/** Live legs — mutated when places change. */
+export const legs = clone(DEFAULT_LEGS);
+
+export function getDefaultStops() {
+  return clone(DEFAULT_STOPS);
+}
+
+export function getDefaultLegs() {
+  return clone(DEFAULT_LEGS);
+}
+
 export const trip = {
   brand: 'Kẹm',
   title: 'Đi Giữa Trời Rực Rỡ',
@@ -145,12 +171,3 @@ export const trip = {
   start: '2026-08-15T08:30:00+07:00',
   end: '2026-08-16T12:00:00+07:00',
 };
-
-/** Route legs — đúng lịch trình thực tế. */
-export const legs = [
-  { from: 'xuat-phat', to: 'nghi-duong', label: 'Xuất phát → Homestay', longHaul: true },
-  { from: 'nghi-duong', to: 'tra-chieu', label: 'Homestay → Trà chiều' },
-  { from: 'tra-chieu', to: 'nghi-duong', label: 'Trà chiều → về Homestay', overnight: true },
-  { from: 'nghi-duong', to: 'mua-qua', label: 'Homestay → Mua quả' },
-  { from: 'mua-qua', to: 'xuat-phat', label: 'Về Hà Nội', return: true, longHaul: true },
-];

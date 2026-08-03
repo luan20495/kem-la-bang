@@ -1,7 +1,7 @@
 import gsap from 'gsap';
 import { Popup } from 'maplibre-gl';
 import { stops, trip } from './journey.js';
-import { buildAllLegs, buildCinemaPath, byId, selectLegAlternative, CORRIDOR_BLURB } from './routing.js';
+import { buildAllLegs, buildCinemaPath, byId, selectLegAlternative, CORRIDOR_BLURB, rebuildById, attachNarrativeMap } from './routing.js';
 import {
   createMap,
   waitForMap,
@@ -9,6 +9,7 @@ import {
   enableTerrain,
   addRouteLayers,
   refreshRouteGeometry,
+  setRouteDirection,
   createStopMarkers,
   setActiveMarker,
   fitJourney,
@@ -19,8 +20,14 @@ import {
 import { createAtmosphere, createBootScene } from './atmosphere.js';
 import { createCinemaController } from './cinema.js';
 import { createCarMarker, createDriveTour } from './drive.js';
-import { beatAt, SCRUB_STOPS, DRIVE_STOP_T } from './timeline.js';
+import { beatAt, SCRUB_STOPS, DRIVE_STOP_T, rebuildTimeline, TIMELINE } from './timeline.js';
+import { hydratePlaces } from './places-store.js';
+import { createPlacesEditor } from './editor.js';
 import './style.css';
+
+hydratePlaces();
+rebuildById();
+rebuildTimeline(stops);
 
 const bootScene = createBootScene(document.getElementById('boot-canvas'));
 const bootBar = document.getElementById('boot-bar');
@@ -40,6 +47,8 @@ const state = {
   drive: null,
   car: null,
   builtLegs: null,
+  routeDir: 'out', // 'out' | 'back' — only one direction drawn at a time
+  routeDirPinned: false, // true after manual toggle until scrub/drive moves t
   photoTimer: null,
   photoPopup: null,
   reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
@@ -88,14 +97,6 @@ function updateSheet(stop) {
   }
   if (mapsTitle) mapsTitle.textContent = stop.name;
   if (mapsPlace) mapsPlace.textContent = stop.place;
-  const t = DRIVE_STOP_T[stop.id];
-  if (t != null) {
-    setHud(t, {
-      timeText: `${stop.day} · ${stop.time}`,
-      place: stop.name,
-      label: stop.role,
-    });
-  }
 }
 
 function corridorOptions(builtLegs) {
@@ -251,19 +252,115 @@ function renderRoutePicker(builtLegs, handlers = {}) {
   });
 }
 
+function syncRouteDirUi(dir) {
+  document.querySelectorAll('#route-dir .route-dir__btn').forEach((btn) => {
+    const on = btn.dataset.dir === dir;
+    btn.classList.toggle('is-on', on);
+    btn.setAttribute('aria-pressed', String(on));
+  });
+  const hint = document.getElementById('route-dir-hint');
+  if (hint) {
+    hint.textContent =
+      dir === 'out'
+        ? 'Đang hiện tuyến lên Kẹm · xanh'
+        : 'Đang hiện tuyến về Hà Nội · cam nét đứt';
+  }
+}
+
+function applyRouteDir(dir, { pin = false } = {}) {
+  if (dir !== 'out' && dir !== 'back') return;
+  if (pin) state.routeDirPinned = true;
+  const changed = state.routeDir !== dir;
+  state.routeDir = dir;
+  syncRouteDirUi(dir);
+  if (!changed || !state.map) return;
+  if (state.builtLegs) {
+    refreshRouteGeometry(state.map, state.builtLegs, getRemovedCorridors(), dir);
+  } else {
+    setRouteDirection(state.map, dir);
+  }
+}
+
+/** Return leg starts near the last stop before heading home. */
+function routeDirFromT(t) {
+  const last = stops[stops.length - 1];
+  const threshold = (DRIVE_STOP_T[last?.id] ?? 0.84) - 0.02;
+  return t >= threshold ? 'back' : 'out';
+}
+
+function updateRailMeta() {
+  const el = document.getElementById('rail-meta');
+  if (!el) return;
+  const n = stops.length;
+  el.textContent = `${n} điểm · chỉnh tự do · về điểm đầu`;
+}
+
 function setHud(t, overrides = {}) {
   const beat = beatAt(t);
+  const hud = document.getElementById('hud');
   const scrub = document.getElementById('time-scrub');
-  if (scrub && document.activeElement !== scrub) {
-    scrub.value = String(Math.round(beat.t * 1000));
+  const driving = Boolean(state.drive?.running);
+  if (scrub) {
+    if (document.activeElement !== scrub) {
+      scrub.value = String(Math.round(beat.t * 1000));
+    }
+    scrub.disabled = driving;
+  }
+  if (hud) {
+    hud.style.setProperty('--hud-t', String(beat.t));
+    hud.classList.toggle('is-live', driving);
   }
   document.getElementById('hud-clock').textContent = overrides.timeText || beat.timeText;
   document.getElementById('hud-place').textContent = overrides.place || beat.place;
   document.getElementById('hud-phase').textContent = overrides.label || beat.label;
+  const pct = document.getElementById('hud-pct');
+  if (pct) pct.textContent = `${Math.round(beat.t * 100)}%`;
   document.querySelectorAll('.hud__tick').forEach((el) => {
     const tt = Number(el.dataset.t);
-    el.classList.toggle('is-on', Math.abs(tt - beat.t) < 0.06);
+    el.classList.toggle('is-on', Math.abs(tt - beat.t) < 0.055);
+    el.classList.toggle('is-passed', tt < beat.t - 0.04);
   });
+
+  if (driving) state.routeDirPinned = false;
+  if (!state.routeDirPinned) {
+    applyRouteDir(routeDirFromT(beat.t));
+  }
+}
+
+function jumpHud(t) {
+  if (state.drive?.running) {
+    state.drive.stop();
+    hidePhotos();
+    setDriveBtn(false);
+  }
+  state.routeDirPinned = false;
+  state.cinema?.pause();
+  state.cinema?.scrub(t);
+  setHud(t);
+  const stop = SCRUB_STOPS.find((s) => Math.abs(s.t - t) < 0.01);
+  if (stop?.stopId && byId[stop.stopId]) {
+    state.activeId = stop.stopId;
+    updateSheet(byId[stop.stopId]);
+  }
+}
+
+function snapHud(dir) {
+  const scrub = document.getElementById('time-scrub');
+  const t = Number(scrub?.value || 0) / 1000;
+  let i;
+  if (dir > 0) {
+    i = SCRUB_STOPS.findIndex((s) => s.t > t + 0.02);
+    if (i < 0) i = SCRUB_STOPS.length - 1;
+  } else {
+    i = 0;
+    for (let k = SCRUB_STOPS.length - 1; k >= 0; k -= 1) {
+      if (SCRUB_STOPS[k].t < t - 0.02) {
+        i = k;
+        break;
+      }
+    }
+  }
+  jumpHud(SCRUB_STOPS[i].t);
 }
 
 function renderHudTicks() {
@@ -271,17 +368,33 @@ function renderHudTicks() {
   if (!host) return;
   host.innerHTML = SCRUB_STOPS.map(
     (s) =>
-      `<span class="hud__tick" data-t="${s.t}" style="left:${s.t * 100}%" title="${s.place}"></span>`
+      `<button type="button" class="hud__tick" data-t="${s.t}" data-stop="${s.stopId || ''}" style="left:${s.t * 100}%" aria-label="${s.place} · ${s.label}">
+        <span class="hud__tick-tip">${s.clock} · ${s.place}</span>
+        <i aria-hidden="true"></i>
+      </button>`
   ).join('');
+  host.querySelectorAll('.hud__tick').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      jumpHud(Number(btn.dataset.t));
+    });
+  });
 }
 
 function rebuildPathControllers(map) {
-  const path = buildCinemaPath(state.builtLegs);
+  const path = attachNarrativeMap(buildCinemaPath(state.builtLegs), TIMELINE);
   state.cinema = createCinemaController({
     map,
     path,
     onStopHint: () => {},
-    onTick: ({ t }) => setHud(t),
+    onTick: ({ t, pt }) => {
+      setHud(t);
+      if (state.drive?.running) return;
+      if (pt) {
+        state.car?.setLngLat(pt.lng, pt.lat);
+        state.car?.setBearing(pt.bearing);
+      }
+    },
   });
 
   state.drive = createDriveTour({
@@ -504,12 +617,22 @@ function selectStop(id, { fly = true, photos = true } = {}) {
   }
   if (state.cinema?.playing) state.cinema.pause();
 
+  const t = DRIVE_STOP_T[stop.id];
+  if (t != null) {
+    state.cinema?.apply?.(t, { animateCam: false });
+    setHud(t, {
+      timeText: `${stop.day} · ${stop.time}`,
+      place: stop.name,
+      label: stop.role,
+    });
+  }
+
   if (fly) {
     state.map.flyTo({
       center: [stop.lng, stop.lat],
-      zoom: 13,
-      pitch: 0,
-      bearing: 0,
+      zoom: 13.4,
+      pitch: 46,
+      bearing: state.map.getBearing(),
       duration: state.reducedMotion ? 0 : 1400,
       essential: true,
     });
@@ -648,6 +771,9 @@ async function main() {
   renderTimeline((id) => selectStop(id));
   state.markers = createStopMarkers(map, (id) => selectStop(id));
   state.car = createCarMarker(map, stops[0].lng, stops[0].lat);
+  if (import.meta.env.DEV) {
+    window.__kem = { map, car: state.car };
+  }
 
   rebuildPathControllers(map);
 
@@ -658,7 +784,7 @@ async function main() {
       setDriveBtn(false);
     }
     applyCorridor(state.builtLegs, tag);
-    refreshRouteGeometry(map, state.builtLegs, getRemovedCorridors());
+    refreshRouteGeometry(map, state.builtLegs, getRemovedCorridors(), state.routeDir);
     rebuildPathControllers(map);
     renderRoutePicker(state.builtLegs, routePickerHandlers);
     document.getElementById('hud-phase').textContent = `Tuyến · ${tag}`;
@@ -671,7 +797,7 @@ async function main() {
     removed.add(tag);
     setRemovedCorridors(removed);
     const next = ensureSelectedVisible(state.builtLegs);
-    refreshRouteGeometry(map, state.builtLegs, removed);
+    refreshRouteGeometry(map, state.builtLegs, removed, state.routeDir);
     rebuildPathControllers(map);
     renderRoutePicker(state.builtLegs, routePickerHandlers);
     if (next) {
@@ -681,7 +807,7 @@ async function main() {
 
   const onRestoreCorridors = () => {
     setRemovedCorridors(new Set());
-    refreshRouteGeometry(map, state.builtLegs, new Set());
+    refreshRouteGeometry(map, state.builtLegs, new Set(), state.routeDir);
     rebuildPathControllers(map);
     renderRoutePicker(state.builtLegs, routePickerHandlers);
     document.getElementById('hud-phase').textContent = 'Đã khôi phục mọi tuyến';
@@ -690,10 +816,64 @@ async function main() {
   const routePickerHandlers = { onPickCorridor: onPickRoute, onRemoveCorridor, onRestoreCorridors };
 
   ensureSelectedVisible(builtLegs);
-  refreshRouteGeometry(map, builtLegs, getRemovedCorridors());
+  refreshRouteGeometry(map, builtLegs, getRemovedCorridors(), state.routeDir);
   renderRoutePicker(builtLegs, routePickerHandlers);
+  applyRouteDir('out');
+  updateRailMeta();
   renderHudTicks();
   setHud(0);
+
+  document.querySelectorAll('#route-dir .route-dir__btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      applyRouteDir(btn.dataset.dir, { pin: true });
+    });
+  });
+
+  async function rebuildPlacesJourney() {
+    rebuildById();
+    rebuildTimeline(stops);
+    updateRailMeta();
+
+    if (state.drive?.running) {
+      state.drive.stop();
+      hidePhotos();
+      setDriveBtn(false);
+    }
+    state.cinema?.pause();
+
+    state.markers?.forEach((m) => m.marker.remove());
+    state.markers = createStopMarkers(map, (id) => selectStop(id));
+
+    if (!stops.length) return;
+    if (!stops.some((s) => s.id === state.activeId)) {
+      state.activeId = stops[0].id;
+    }
+
+    state.car?.setLngLat(stops[0].lng, stops[0].lat);
+
+    const built = await buildAllLegs();
+    state.builtLegs = built;
+    ensureSelectedVisible(built);
+    refreshRouteGeometry(map, built, getRemovedCorridors(), state.routeDir);
+    rebuildPathControllers(map);
+    renderRoutePicker(built, routePickerHandlers);
+    renderTimeline((id) => selectStop(id));
+    renderHudTicks();
+    selectStop(state.activeId, { fly: true, photos: false });
+    fitJourney(map, getPadding());
+    applyRouteDir(routeDirFromT(Number(document.getElementById('time-scrub')?.value || 0) / 1000));
+  }
+
+  const placesEditor = createPlacesEditor({
+    onRebuild: rebuildPlacesJourney,
+    onPickMode: () => {},
+  });
+
+  map.on('click', (e) => {
+    if (placesEditor.applyMapClick(e.lngLat.lng, e.lngLat.lat)) {
+      e.preventDefault();
+    }
+  });
 
   document.getElementById('btn-overview').addEventListener('click', () => {
     state.drive?.stop();
@@ -715,23 +895,44 @@ async function main() {
     state.drive.start();
   });
 
-  document.getElementById('time-scrub').addEventListener('input', (e) => {
+  const hudEl = document.getElementById('hud');
+  const scrubEl = document.getElementById('time-scrub');
+  const endScrub = () => hudEl?.classList.remove('is-scrubbing');
+  scrubEl.addEventListener('pointerdown', () => hudEl?.classList.add('is-scrubbing'));
+  scrubEl.addEventListener('pointerup', endScrub);
+  scrubEl.addEventListener('pointercancel', endScrub);
+  scrubEl.addEventListener('blur', endScrub);
+  scrubEl.addEventListener('input', (e) => {
     if (state.drive?.running) return;
+    state.routeDirPinned = false;
     const t = Number(e.target.value) / 1000;
-    state.cinema.scrub(t);
+    state.cinema.pause();
+    state.cinema.apply(t, { animateCam: true, duration: 0 });
   });
+  document.getElementById('hud-prev')?.addEventListener('click', () => snapHud(-1));
+  document.getElementById('hud-next')?.addEventListener('click', () => snapHud(1));
 
   window.addEventListener('keydown', (e) => {
-    if (e.target.closest('input, textarea')) return;
+    if (e.target.closest('input, textarea, button')) return;
     if (e.code === 'Space') {
       e.preventDefault();
       document.getElementById('btn-drive').click();
     }
     if (e.key === 'ArrowRight') {
+      if (e.shiftKey) {
+        e.preventDefault();
+        snapHud(1);
+        return;
+      }
       const idx = stops.findIndex((s) => s.id === state.activeId);
       if (idx < stops.length - 1) selectStop(stops[idx + 1].id);
     }
     if (e.key === 'ArrowLeft') {
+      if (e.shiftKey) {
+        e.preventDefault();
+        snapHud(-1);
+        return;
+      }
       const idx = stops.findIndex((s) => s.id === state.activeId);
       if (idx > 0) selectStop(stops[idx - 1].id);
     }

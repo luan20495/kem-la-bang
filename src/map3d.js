@@ -33,24 +33,26 @@ export function createMap(container) {
           type: 'raster',
           source: 'carto',
           paint: {
-            'raster-saturation': -0.08,
-            'raster-contrast': 0.04,
+            'raster-saturation': 0.12,
+            'raster-contrast': 0.08,
+            'raster-brightness-min': 0.02,
           },
         },
       ],
     },
     center: [105.7, 21.3],
     zoom: 8.2,
-    pitch: 0,
-    bearing: 0,
-    maxPitch: 0,
-    dragRotate: false,
-    pitchWithRotate: false,
-    antialias: true,
+    pitch: 28,
+    bearing: -12,
+    maxPitch: 68,
+    minPitch: 0,
+    dragRotate: true,
+    pitchWithRotate: true,
+    canvasContextAttributes: { antialias: true },
     attributionControl: true,
   });
 
-  map.addControl(new NavigationControl({ showCompass: false }), 'bottom-right');
+  map.addControl(new NavigationControl({ showCompass: true }), 'bottom-right');
   map.addControl(new ScaleControl({ maxWidth: 120 }), 'bottom-left');
 
   return map;
@@ -112,9 +114,9 @@ export function whenStyleReady(map, timeoutMs = 20000) {
   });
 }
 
-/** Map stays 2D — day/night only drives CSS atmosphere overlays. */
-export function enableTerrain() {
-  /* no-op: flat 2D map by design */
+/** Soft 3D tilt so the car reads as a real vehicle on the map. */
+export function enableTerrain(map) {
+  map.easeTo({ pitch: 28, bearing: -12, duration: 0 });
 }
 
 export function applyDayNight(_map, t) {
@@ -189,15 +191,27 @@ export function addRouteLayers(map, builtLegs) {
   // Return under outbound so shared roads stay green; return-only spurs still show.
   if (inbound) {
     map.addLayer({
+      id: 'route-in-aura',
+      type: 'line',
+      source: 'route-in',
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': '#FF6B2C',
+        'line-width': 22,
+        'line-opacity': 0.18,
+        'line-blur': 2.4,
+      },
+    });
+    map.addLayer({
       id: 'route-in-glow',
       type: 'line',
       source: 'route-in',
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
         'line-color': '#FF8A4C',
-        'line-width': 12,
-        'line-opacity': 0.32,
-        'line-blur': 1.1,
+        'line-width': 14,
+        'line-opacity': 0.38,
+        'line-blur': 1.2,
       },
     });
     map.addLayer({
@@ -207,26 +221,48 @@ export function addRouteLayers(map, builtLegs) {
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
         'line-color': '#E35D2A',
-        'line-width': 5,
-        'line-opacity': 0.92,
+        'line-width': 5.5,
+        'line-opacity': 0.95,
         'line-dasharray': [2.4, 1.4],
       },
     });
   }
 
   map.addLayer({
-    id: 'route-out-glow',
+    id: 'route-out-aura',
     type: 'line',
     source: 'route-out',
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
       'line-color': '#FFC247',
-      'line-width': 14,
-      'line-opacity': 0.28,
-      'line-blur': 1.2,
+      'line-width': 26,
+      'line-opacity': 0.2,
+      'line-blur': 2.8,
     },
   });
-
+  map.addLayer({
+    id: 'route-out-glow',
+    type: 'line',
+    source: 'route-out',
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: {
+      'line-color': '#FFE08A',
+      'line-width': 16,
+      'line-opacity': 0.34,
+      'line-blur': 1.4,
+    },
+  });
+  map.addLayer({
+    id: 'route-out-casing',
+    type: 'line',
+    source: 'route-out',
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: {
+      'line-color': '#062E26',
+      'line-width': 8,
+      'line-opacity': 0.55,
+    },
+  });
   map.addLayer({
     id: 'route-out-core',
     type: 'line',
@@ -234,8 +270,20 @@ export function addRouteLayers(map, builtLegs) {
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
       'line-color': '#0F5C4A',
-      'line-width': 5,
-      'line-opacity': 0.95,
+      'line-width': 5.5,
+      'line-opacity': 0.98,
+    },
+  });
+  map.addLayer({
+    id: 'route-out-highlight',
+    type: 'line',
+    source: 'route-out',
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: {
+      'line-color': '#7DFFCE',
+      'line-width': 1.6,
+      'line-opacity': 0.55,
+      'line-offset': -1.2,
     },
   });
 
@@ -248,10 +296,39 @@ export function addRouteLayers(map, builtLegs) {
     type: 'circle',
     source: 'traveler',
     paint: {
-      'circle-radius': 18,
+      'circle-radius': [
+        'interpolate',
+        ['linear'],
+        ['zoom'],
+        8,
+        16,
+        14,
+        34,
+      ],
       'circle-color': '#FFC247',
-      'circle-opacity': 0.25,
-      'circle-blur': 0.6,
+      'circle-opacity': 0.22,
+      'circle-blur': 0.85,
+    },
+  });
+  map.addLayer({
+    id: 'traveler-ring',
+    type: 'circle',
+    source: 'traveler',
+    paint: {
+      'circle-radius': [
+        'interpolate',
+        ['linear'],
+        ['zoom'],
+        8,
+        8,
+        14,
+        16,
+      ],
+      'circle-color': 'transparent',
+      'circle-opacity': 0,
+      'circle-stroke-width': 2,
+      'circle-stroke-color': '#E35D2A',
+      'circle-stroke-opacity': 0.55,
     },
   });
   map.addLayer({
@@ -259,20 +336,25 @@ export function addRouteLayers(map, builtLegs) {
     type: 'circle',
     source: 'traveler',
     paint: {
-      'circle-radius': 7,
+      'circle-radius': 4,
       'circle-color': '#fff8e8',
-      'circle-stroke-width': 3,
+      'circle-opacity': 0,
+      'circle-stroke-width': 0,
       'circle-stroke-color': '#E35D2A',
     },
   });
 
   refreshRouteGeometry(map, builtLegs);
+  setRouteDirection(map, 'out');
 }
 
 /** Redraw selected + alternative geometries after user picks a tuyến. */
-export function refreshRouteGeometry(map, builtLegs, hiddenTags = new Set()) {
+export function refreshRouteGeometry(map, builtLegs, hiddenTags = new Set(), dir = 'out') {
   const altFeatures = [];
   builtLegs.forEach((leg, legIndex) => {
+    const isReturn = Boolean(leg.return);
+    if (dir === 'out' && isReturn) return;
+    if (dir === 'back' && !isReturn) return;
     (leg.alternatives || []).forEach((alt, ai) => {
       if (ai === leg.selected) return;
       if (hiddenTags.has(alt.tag)) return;
@@ -308,6 +390,36 @@ export function refreshRouteGeometry(map, builtLegs, hiddenTags = new Set()) {
       properties: {},
       geometry: { type: 'LineString', coordinates: ret.coordinates },
     });
+  }
+
+  setRouteDirection(map, dir);
+}
+
+/**
+ * Show only outbound (xanh) or return (cam) — never both stacked.
+ * @param {import('maplibre-gl').Map} map
+ * @param {'out' | 'back'} dir
+ */
+export function setRouteDirection(map, dir) {
+  if (!map) return;
+  const showOut = dir === 'out';
+  const outVis = showOut ? 'visible' : 'none';
+  const backVis = showOut ? 'none' : 'visible';
+
+  for (const id of [
+    'route-out-aura',
+    'route-out-glow',
+    'route-out-casing',
+    'route-out-core',
+    'route-out-highlight',
+  ]) {
+    if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', outVis);
+  }
+  for (const id of ['route-in-aura', 'route-in-glow', 'route-in-core']) {
+    if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', backVis);
+  }
+  if (map.getLayer('route-alts-line')) {
+    map.setLayoutProperty('route-alts-line', 'visibility', showOut ? 'visible' : 'none');
   }
 }
 
@@ -361,8 +473,8 @@ export function fitJourney(map, padding) {
   stops.forEach((s) => bounds.extend([s.lng, s.lat]));
   map.fitBounds(bounds, {
     padding,
-    pitch: 0,
-    bearing: 0,
+    pitch: 32,
+    bearing: -8,
     duration: 1200,
     essential: true,
   });

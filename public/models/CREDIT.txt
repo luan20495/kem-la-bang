@@ -1,0 +1,3 @@
+Kenney Car Kit (CC0) — https://kenney.nl
+Files: hatchback-sports.glb, sedan-sports.glb, suv.glb, wheel-*.glb, colormap.png
+License: Creative Commons Zero (public domain). Credit “Kenney / kenney.nl” appreciated.

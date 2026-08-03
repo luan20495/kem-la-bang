@@ -1,6 +1,16 @@
 import { stops, legs } from './journey.js';
 
-const byId = Object.fromEntries(stops.map((s) => [s.id, s]));
+/** Mutable lookup — call rebuildById() after place edits. */
+export const byId = Object.create(null);
+
+export function rebuildById() {
+  for (const k of Object.keys(byId)) delete byId[k];
+  stops.forEach((s) => {
+    byId[s.id] = s;
+  });
+}
+
+rebuildById();
 
 /** Live via probes when baked corridors are unavailable. */
 const LEG_VIAS = {
@@ -43,7 +53,7 @@ const LEG_VIAS = {
 /** Soft default — thông thoáng matches the trip vibe; user can switch. */
 const DEFAULT_CORRIDOR = 'Thông thoáng';
 
-/** Only these long-haul hops use the 3 corridor styles. */
+/** Only these baked long-haul hops use the 3 corridor styles; others OSRM/fallback. */
 const LONG_HAUL_KEYS = new Set(['xuat-phat>nghi-duong', 'mua-qua>xuat-phat']);
 
 const CORRIDOR_BLURB = {
@@ -365,6 +375,59 @@ export function buildCinemaPath(builtLegs) {
   return { coordinates, lengths, total, stopHits };
 }
 
+/**
+ * Build anchors so HUD/timeline narrative t (story beats) maps onto real
+ * distance along the cinema path (stopHits). Without this, scrubbing 36%
+ * (Homestay) can land far from Homestay on the polyline.
+ * @param {{ lengths: number[], total: number, stopHits: {id:string,index:number}[] }} path
+ * @param {{ t: number, stopId?: string }[]} timelineBeats
+ */
+export function attachNarrativeMap(path, timelineBeats) {
+  const hits = path.stopHits || [];
+  let hi = 0;
+  const anchors = [{ n: 0, p: 0 }];
+
+  for (const beat of timelineBeats) {
+    if (!beat?.stopId || beat.t <= 0) continue;
+    let found = -1;
+    for (let i = hi; i < hits.length; i += 1) {
+      if (hits[i].id === beat.stopId) {
+        found = i;
+        break;
+      }
+    }
+    if (found < 0) continue;
+    hi = found + 1;
+    const idx = Math.max(0, Math.min(path.lengths.length - 1, hits[found].index));
+    const p = path.total > 0 ? path.lengths[idx] / path.total : 0;
+    const prev = anchors[anchors.length - 1];
+    anchors.push({ n: beat.t, p: Math.max(prev.p, Math.min(1, p)), stopId: beat.stopId });
+  }
+
+  const last = anchors[anchors.length - 1];
+  if (last.n < 1 - 1e-6) anchors.push({ n: 1, p: 1 });
+  else last.p = 1;
+
+  path.narrativeAnchors = anchors;
+  return path;
+}
+
+/** Narrative timeline t → distance fraction along path. */
+export function narrativeToPathT(path, narrativeT) {
+  const anchors = path?.narrativeAnchors;
+  if (!anchors?.length) return Math.max(0, Math.min(1, narrativeT));
+  const x = Math.max(0, Math.min(1, narrativeT));
+  let i = 0;
+  for (let k = 0; k < anchors.length; k += 1) {
+    if (x >= anchors[k].n) i = k;
+  }
+  const a = anchors[i];
+  const b = anchors[Math.min(anchors.length - 1, i + 1)];
+  if (b.n <= a.n) return a.p;
+  const u = (x - a.n) / (b.n - a.n);
+  return a.p + (b.p - a.p) * u;
+}
+
 export function pointAlongPath(path, t) {
   const target = Math.max(0, Math.min(1, t)) * path.total;
   let i = 1;
@@ -377,8 +440,24 @@ export function pointAlongPath(path, t) {
   const b = path.coordinates[i1];
   const lng = a[0] + (b[0] - a[0]) * local;
   const lat = a[1] + (b[1] - a[1]) * local;
-  const bearing = computeBearing(a, b);
+  const bearing = bearingAlongPath(path, i0, 55);
   return { lng, lat, bearing, index: i0 };
+}
+
+/** Compass bearing looking ~lookAheadM ahead — damps GPS zigzag noise. */
+export function bearingAlongPath(path, fromIndex, lookAheadM = 55) {
+  const coords = path.coordinates;
+  const start = Math.max(0, Math.min(coords.length - 1, fromIndex));
+  const origin = coords[start];
+  let i = start;
+  while (i < coords.length - 1 && haversine(origin, coords[i]) < lookAheadM) i += 1;
+  if (i <= start) i = Math.min(coords.length - 1, start + 1);
+  return computeBearing(origin, coords[i]);
+}
+
+/** Bearing between two lng/lat pairs (degrees clockwise from north). */
+export function bearingBetween(a, b) {
+  return computeBearing(a, b);
 }
 
 function haversine(a, b) {
@@ -404,4 +483,4 @@ function computeBearing(a, b) {
   return ((Math.atan2(y, x) * toDeg) + 360) % 360;
 }
 
-export { byId, formatKm, formatMins, DEFAULT_CORRIDOR, CORRIDOR_BLURB };
+export { formatKm, formatMins, DEFAULT_CORRIDOR, CORRIDOR_BLURB };

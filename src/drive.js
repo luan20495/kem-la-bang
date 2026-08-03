@@ -1,75 +1,56 @@
 import gsap from 'gsap';
-import { Marker } from 'maplibre-gl';
 import { stops } from './journey.js';
-import { byId } from './routing.js';
+import { byId, bearingAlongPath, bearingBetween } from './routing.js';
 import { applyDayNight } from './map3d.js';
+import { createCar3D } from './car3d.js';
+import { DRIVE_STOP_T } from './timeline.js';
 
-const CAR_SVG = `
-<svg class="car__svg" viewBox="0 0 64 40" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-  <ellipse cx="32" cy="34" rx="22" ry="4" fill="rgba(0,0,0,0.2)"/>
-  <path d="M12 26c1-8 8-14 20-14s19 6 20 14H12z" fill="#E35D2A"/>
-  <path d="M18 26c1.2-5.5 6-9.5 14-9.5S44.8 20.5 46 26H18z" fill="#FFC247"/>
-  <rect x="20" y="18" width="10" height="7" rx="1.5" fill="#7EB8D8" opacity="0.9"/>
-  <rect x="34" y="18" width="10" height="7" rx="1.5" fill="#7EB8D8" opacity="0.9"/>
-  <circle cx="18" cy="28" r="5" fill="#1a1a1a"/>
-  <circle cx="18" cy="28" r="2.2" fill="#bbb"/>
-  <circle cx="46" cy="28" r="5" fill="#1a1a1a"/>
-  <circle cx="46" cy="28" r="2.2" fill="#bbb"/>
-  <rect x="10" y="24" width="4" height="3" rx="1" fill="#ffe08a"/>
-  <rect x="50" y="24" width="4" height="3" rx="1" fill="#ff6b4a"/>
-</svg>`;
-
-function bearingBetween(a, b) {
-  const toRad = Math.PI / 180;
-  const toDeg = 180 / Math.PI;
-  const lat1 = a[1] * toRad;
-  const lat2 = b[1] * toRad;
-  const dLng = (b[0] - a[0]) * toRad;
-  const y = Math.sin(dLng) * Math.cos(lat2);
-  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
-  return ((Math.atan2(y, x) * toDeg) + 360) % 360;
-}
+export { createCar3D as createCarMarker };
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export function createCarMarker(map, lng, lat) {
-  const el = document.createElement('div');
-  el.className = 'car';
-  el.innerHTML = CAR_SVG;
-  el.setAttribute('aria-label', 'Xe đang chạy hành trình');
+function lerpBearing(from, to, t) {
+  const d = ((to - from + 540) % 360) - 180;
+  return (from + d * t + 360) % 360;
+}
 
-  const marker = new Marker({
-    element: el,
-    anchor: 'center',
-    pitchAlignment: 'map',
-    rotationAlignment: 'map',
-  })
-    .setLngLat([lng, lat])
-    .addTo(map);
+/** Cumulative meters along a polyline — animate by distance, not point index. */
+function buildLengthTable(coordinates) {
+  const lengths = [0];
+  let total = 0;
+  for (let i = 1; i < coordinates.length; i += 1) {
+    const a = coordinates[i - 1];
+    const b = coordinates[i];
+    const dLat = (b[1] - a[1]) * 110540;
+    const dLng = (b[0] - a[0]) * 111320 * Math.cos(((a[1] + b[1]) / 2) * (Math.PI / 180));
+    total += Math.hypot(dLat, dLng);
+    lengths.push(total);
+  }
+  return { lengths, total: total || 1 };
+}
 
+function pointAtDistance(coordinates, lengths, dist) {
+  const last = coordinates.length - 1;
+  const target = Math.max(0, Math.min(lengths[last], dist));
+  let i = 1;
+  while (i < lengths.length && lengths[i] < target) i += 1;
+  const i0 = Math.max(0, i - 1);
+  const i1 = Math.min(last, i);
+  const span = lengths[i1] - lengths[i0] || 1;
+  const u = (target - lengths[i0]) / span;
+  const a = coordinates[i0];
+  const b = coordinates[i1];
   return {
-    marker,
-    el,
-    setLngLat(lng2, lat2) {
-      marker.setLngLat([lng2, lat2]);
-    },
-    setBearing(deg) {
-      el.style.setProperty('--rot', `${deg - 90}deg`);
-    },
-    setDriving(on) {
-      el.classList.toggle('is-driving', on);
-    },
-    remove() {
-      marker.remove();
-    },
+    lng: a[0] + (b[0] - a[0]) * u,
+    lat: a[1] + (b[1] - a[1]) * u,
+    index: i0,
   };
 }
 
 /**
- * Drive car along stops in order: 1 → 2 → 3 → 4, pause + photos at each,
- * then return home.
+ * Drive car along stops. Constant-speed along path + soft camera = no stutter.
  */
 export function createDriveTour({
   map,
@@ -85,23 +66,57 @@ export function createDriveTour({
   let aborted = false;
   let running = false;
   let tween = null;
+  let camFrame = 0;
+  const chase = {
+    lng: 0,
+    lat: 0,
+    bearing: 0,
+    carBrg: 0,
+    primed: false,
+  };
 
   const driveLegs = builtLegs.filter((l) => !l.return);
   const returnLeg = builtLegs.find((l) => l.return);
 
-  const STOP_T = {
-    'xuat-phat': 0,
-    'nghi-duong': 0.36,
-    'tra-chieu': 0.54,
-    'mua-qua': 0.84,
-  };
+  function stopT(id, fallback = 0) {
+    return DRIVE_STOP_T[id] ?? fallback;
+  }
 
   function abort() {
+    const wasRunning = running;
     aborted = true;
     running = false;
     tween?.kill();
     tween = null;
     car.setDriving(false);
+    chase.primed = false;
+    if (wasRunning) {
+      map.easeTo({ pitch: 28, bearing: map.getBearing(), duration: 700, essential: true });
+    }
+  }
+
+  function primeChase(lng, lat) {
+    chase.lng = lng;
+    chase.lat = lat;
+    chase.bearing = map.getBearing();
+    chase.primed = true;
+  }
+
+  /**
+   * Soft pan, throttled (~20fps) so MapLibre doesn’t thrash tiles every GSAP tick.
+   * Bearing locked. Center tracks car closely — no “swim” lag.
+   */
+  function chaseCam(lng, lat) {
+    if (!chase.primed) {
+      primeChase(lng, lat);
+      map.jumpTo({ center: [lng, lat], bearing: chase.bearing });
+      return;
+    }
+    chase.lng += (lng - chase.lng) * 0.35;
+    chase.lat += (lat - chase.lat) * 0.35;
+    camFrame += 1;
+    if (camFrame % 3 !== 0) return;
+    map.setCenter([chase.lng, chase.lat]);
   }
 
   function animateAlong(coordinates, durationSec, tFrom, tTo) {
@@ -110,28 +125,33 @@ export function createDriveTour({
         resolve();
         return;
       }
-      const proxy = { i: 0 };
-      const last = coordinates.length - 1;
+      const { lengths, total } = buildLengthTable(coordinates);
+      const pathLike = { coordinates };
+      const proxy = { d: 0 };
+      const startBrg = bearingBetween(coordinates[0], coordinates[Math.min(coordinates.length - 1, 12)]);
+      chase.carBrg = startBrg;
+      camFrame = 0;
+      primeChase(coordinates[0][0], coordinates[0][1]);
+      car.setBearing(startBrg);
+      car.setLngLat(coordinates[0][0], coordinates[0][1]);
+      map.jumpTo({ center: [coordinates[0][0], coordinates[0][1]], bearing: chase.bearing });
+
       tween = gsap.to(proxy, {
-        i: last,
+        d: total,
         duration: durationSec,
         ease: 'none',
         onUpdate: () => {
-          const idx = Math.min(last, Math.floor(proxy.i));
-          const next = Math.min(last, idx + 1);
-          const u = proxy.i - idx;
-          const a = coordinates[idx];
-          const b = coordinates[next];
-          const lng = a[0] + (b[0] - a[0]) * u;
-          const lat = a[1] + (b[1] - a[1]) * u;
-          const brg = bearingBetween(a, b);
-          car.setLngLat(lng, lat);
-          car.setBearing(brg);
-          map.setCenter([lng, lat]);
-          const progress = last > 0 ? proxy.i / last : 1;
+          const pt = pointAtDistance(coordinates, lengths, proxy.d);
+          // Long lookahead + lerp → no zig-zag snap
+          const rawBrg = bearingAlongPath(pathLike, pt.index, 90);
+          chase.carBrg = lerpBearing(chase.carBrg, rawBrg, 0.08);
+          car.setLngLat(pt.lng, pt.lat);
+          car.setBearing(chase.carBrg);
+          chaseCam(pt.lng, pt.lat);
+          const progress = proxy.d / total;
           const t = tFrom + (tTo - tFrom) * progress;
           onProgress?.(t);
-          onTick?.({ lng, lat, bearing: brg, t });
+          onTick?.({ lng: pt.lng, lat: pt.lat, bearing: chase.carBrg, t });
         },
         onComplete: resolve,
       });
@@ -143,13 +163,16 @@ export function createDriveTour({
     if (!stop) return;
     car.setLngLat(stop.lng, stop.lat);
     car.setDriving(false);
+    chase.primed = false;
     map.easeTo({
       center: [stop.lng, stop.lat],
-      zoom: Math.max(map.getZoom(), 12.8),
-      duration: 650,
+      zoom: Math.max(map.getZoom(), 13.2),
+      pitch: 40,
+      bearing: map.getBearing(),
+      duration: 750,
       essential: true,
     });
-    const dayT = finale ? 1 : STOP_T[stopId] ?? (stop.order - 1) / Math.max(1, stops.length - 1);
+    const dayT = finale ? 1 : stopT(stopId, (stop.order - 1) / Math.max(1, stops.length - 1));
     applyDayNight(map, dayT);
     onProgress?.(dayT);
     if (showPhotos) {
@@ -163,28 +186,39 @@ export function createDriveTour({
     if (running) return;
     running = true;
     aborted = false;
+    chase.primed = false;
 
     const first = stops[0];
     car.setLngLat(first.lng, first.lat);
     car.setBearing(0);
-    map.jumpTo({ center: [first.lng, first.lat], zoom: Math.max(map.getZoom(), 12.5) });
+    map.jumpTo({
+      center: [first.lng, first.lat],
+      zoom: Math.max(map.getZoom(), 12.5),
+      pitch: 40,
+      bearing: map.getBearing(),
+    });
     await visitStop(first.id, { showPhotos: true });
     if (aborted) return;
 
     for (const leg of driveLegs) {
       if (aborted) return;
-      // Always leave from the leg's true origin (fixes restart / wrong hop)
       const fromStop = byId[leg.from];
-      if (fromStop) {
-        car.setLngLat(fromStop.lng, fromStop.lat);
-      }
-      const fromT = STOP_T[leg.from] ?? 0;
-      const toT = STOP_T[leg.to] ?? Math.min(0.9, fromT + 0.2);
+      if (fromStop) car.setLngLat(fromStop.lng, fromStop.lat);
+      const fromT = stopT(leg.from, 0);
+      const toT = stopT(leg.to, Math.min(0.9, fromT + 0.2));
       onDepart?.(byId[leg.to], { t: fromT + 0.02 });
       car.setDriving(true);
       const km = Math.max(3, (leg.distance || 15000) / 1000);
-      const durationSec = Math.min(14, Math.max(4, km * 0.22));
-      map.easeTo({ zoom: km > 40 ? 10.8 : 12.2, duration: 400, essential: true });
+      const durationSec = Math.min(24, Math.max(8, km * 0.4));
+      map.easeTo({
+        zoom: km > 40 ? 10.8 : 11.8,
+        pitch: 38,
+        bearing: map.getBearing(),
+        duration: 600,
+        essential: true,
+      });
+      await wait(650);
+      if (aborted) return;
       await animateAlong(leg.coordinates, durationSec, fromT, toT);
       if (aborted) return;
       await visitStop(leg.to, {
@@ -196,12 +230,20 @@ export function createDriveTour({
     if (returnLeg && !aborted) {
       const fromStop = byId[returnLeg.from];
       if (fromStop) car.setLngLat(fromStop.lng, fromStop.lat);
-      const fromT = STOP_T[returnLeg.from] ?? 0.84;
+      const fromT = stopT(returnLeg.from, 0.84);
       onDepart?.(byId[returnLeg.to], { t: fromT });
       car.setDriving(true);
       const km = Math.max(8, (returnLeg.distance || 80000) / 1000);
-      const durationSec = Math.min(14, Math.max(6, km * 0.14));
-      map.easeTo({ zoom: 10.6, duration: 450, essential: true });
+      const durationSec = Math.min(26, Math.max(12, km * 0.26));
+      map.easeTo({
+        zoom: 10.6,
+        pitch: 36,
+        bearing: map.getBearing(),
+        duration: 600,
+        essential: true,
+      });
+      await wait(650);
+      if (aborted) return;
       await animateAlong(returnLeg.coordinates, durationSec, fromT, 1);
       if (!aborted) {
         await visitStop(stops[0].id, { showPhotos: true, finale: true });

@@ -1,12 +1,24 @@
 /**
- * Timeline 0→1 mapped to real trip clock + place.
- * Used by HUD scrubber, cinema, and drive sync.
+ * Timeline 0→1 mapped to trip clock + place.
+ * Rebuilt when places are edited.
  */
+
+import { stops } from './journey.js';
 
 /** @typedef {{ t: number, day: string, clock: string, place: string, label: string, stopId?: string }} TimelineBeat */
 
-/** @type {TimelineBeat[]} */
-export const TIMELINE = [
+function parseClock(time) {
+  const m = String(time || '').match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  return `${m[1].padStart(2, '0')}:${m[2]}`;
+}
+
+function replaceArray(target, next) {
+  target.splice(0, target.length, ...next);
+}
+
+/** Classic default beats for the original Kẹm itinerary. */
+const DEFAULT_TIMELINE = [
   {
     t: 0,
     day: '15/08',
@@ -64,16 +76,124 @@ export const TIMELINE = [
   },
 ];
 
-/** Stop markers shown on the scrubber track */
-export const SCRUB_STOPS = TIMELINE.filter((b) => b.stopId && [0, 0.36, 0.54, 0.84, 1].includes(b.t));
+/** @type {TimelineBeat[]} */
+export const TIMELINE = DEFAULT_TIMELINE.map((b) => ({ ...b }));
+
+/** @type {TimelineBeat[]} */
+export const SCRUB_STOPS = [];
+
+/** Progress anchors when arriving at each stop during drive tour */
+export const DRIVE_STOP_T = Object.create(null);
+
+function isClassicKemTrip(list) {
+  const ids = list.map((s) => s.id).join(',');
+  return ids === 'xuat-phat,nghi-duong,tra-chieu,mua-qua';
+}
+
+function buildGenericTimeline(list) {
+  const n = list.length;
+  if (!n) {
+    return [
+      {
+        t: 0,
+        day: '15/08',
+        clock: '08:00',
+        place: 'Bắt đầu',
+        label: 'Chưa có điểm',
+      },
+      {
+        t: 1,
+        day: '15/08',
+        clock: '18:00',
+        place: 'Kết thúc',
+        label: 'Thêm điểm để đi',
+      },
+    ];
+  }
+
+  /** @type {TimelineBeat[]} */
+  const beats = [];
+  list.forEach((s, i) => {
+    const t = n === 1 ? 0 : i / n;
+    beats.push({
+      t,
+      day: s.day || '15/08',
+      clock: parseClock(s.time) || '09:00',
+      place: s.name,
+      label: s.role || 'Điểm dừng',
+      stopId: s.id,
+    });
+    if (i < n - 1) {
+      const mid = n === 1 ? 0.5 : (i + 0.5) / n;
+      beats.push({
+        t: mid,
+        day: s.day || '15/08',
+        clock: parseClock(s.time) || '12:00',
+        place: 'Trên đường',
+        label: `Tới · ${list[i + 1].name}`,
+      });
+    }
+  });
+  const last = list[n - 1];
+  const first = list[0];
+  beats.push({
+    t: 1,
+    day: last.day || '16/08',
+    clock: '12:00',
+    place: first.name,
+    label: `Về · ${first.name}`,
+    stopId: first.id,
+  });
+  beats.sort((a, b) => a.t - b.t);
+  return beats;
+}
+
+export function rebuildTimeline(list = stops) {
+  const classic = isClassicKemTrip(list);
+  const next = classic
+    ? DEFAULT_TIMELINE.map((b) => ({ ...b }))
+    : buildGenericTimeline(list);
+
+  replaceArray(TIMELINE, next);
+
+  const scrub = next.filter((b) => b.stopId);
+  // unique by t
+  const seen = new Set();
+  const uniqueScrub = [];
+  for (const b of scrub) {
+    const key = `${b.t}:${b.stopId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    uniqueScrub.push(b);
+  }
+  replaceArray(SCRUB_STOPS, uniqueScrub);
+
+  for (const k of Object.keys(DRIVE_STOP_T)) delete DRIVE_STOP_T[k];
+  if (classic) {
+    DRIVE_STOP_T['xuat-phat'] = 0;
+    DRIVE_STOP_T['nghi-duong'] = 0.36;
+    DRIVE_STOP_T['tra-chieu'] = 0.54;
+    DRIVE_STOP_T['mua-qua'] = 0.84;
+    DRIVE_STOP_T.home = 1;
+  } else {
+    list.forEach((s, i) => {
+      const n = Math.max(1, list.length);
+      DRIVE_STOP_T[s.id] = n === 1 ? 0 : i / n;
+    });
+    DRIVE_STOP_T.home = 1;
+  }
+  return { TIMELINE, SCRUB_STOPS, DRIVE_STOP_T };
+}
+
+rebuildTimeline(stops);
 
 /**
  * Interpolate between two clocks "HH:MM" within same day for display.
- * Falls back to nearest beat clock if days differ.
  */
 function lerpClock(a, b, u) {
   const [ah, am] = a.split(':').map(Number);
   const [bh, bm] = b.split(':').map(Number);
+  if ([ah, am, bh, bm].some((n) => Number.isNaN(n))) return u < 0.5 ? a : b;
   const aMin = ah * 60 + am;
   const bMin = bh * 60 + bm;
   let m = Math.round(aMin + (bMin - aMin) * u);
@@ -85,7 +205,6 @@ function lerpClock(a, b, u) {
 
 /**
  * @param {number} t 0..1
- * @returns {{ t: number, day: string, clock: string, timeText: string, place: string, label: string, stopId?: string, status: string }}
  */
 export function beatAt(t) {
   const x = Math.max(0, Math.min(1, t));
@@ -100,7 +219,7 @@ export function beatAt(t) {
 
   let clock = cur.clock;
   let day = cur.day;
-  if (cur.day === next.day && u > 0 && u < 1) {
+  if (cur.day === next.day && u > 0 && u < 1 && parseClock(cur.clock) && parseClock(next.clock)) {
     clock = lerpClock(cur.clock, next.clock, u);
   } else if (u >= 0.5) {
     clock = next.clock;
@@ -111,7 +230,8 @@ export function beatAt(t) {
   const label = u < 0.55 ? cur.label : next.label;
   const stopId = u < 0.55 ? cur.stopId : next.stopId;
 
-  const enRoute = !stopId || place === 'Trên đường' || (u > 0.15 && u < 0.85 && cur.place !== next.place);
+  const enRoute =
+    !stopId || place === 'Trên đường' || (u > 0.15 && u < 0.85 && cur.place !== next.place);
   const status =
     place === 'Trên đường'
       ? `Đang đi · ${label}`
@@ -130,12 +250,3 @@ export function beatAt(t) {
     status,
   };
 }
-
-/** Progress anchors when arriving at each stop during drive tour */
-export const DRIVE_STOP_T = {
-  'xuat-phat': 0,
-  'nghi-duong': 0.36,
-  'tra-chieu': 0.54,
-  'mua-qua': 0.84,
-  home: 1,
-};

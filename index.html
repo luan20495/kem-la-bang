@@ -66,6 +66,9 @@
             <span class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
             <span class="chip__label">Phát nhạc</span>
           </button>
+          <button class="chip glass" type="button" id="btn-edit-places" title="Đăng nhập để sửa địa điểm">
+            <span class="chip__label">Sửa điểm</span>
+          </button>
         </div>
       </header>
 
@@ -79,12 +82,23 @@
         </header>
         <div class="rail__head">
           <p class="rail__eyebrow">Hành trình</p>
-          <p class="rail__meta">4 điểm · 1 đêm · về trước trưa</p>
+          <p class="rail__meta" id="rail-meta">4 điểm · 1 đêm · về trước trưa</p>
         </div>
         <ol class="timeline" id="timeline"></ol>
         <div class="rail__foot">
           <div class="routes" id="route-picker">
             <p class="routes__label">Tuyến đường</p>
+            <div class="route-dir" id="route-dir" role="group" aria-label="Chiều đường trên bản đồ">
+              <button type="button" class="route-dir__btn is-on" data-dir="out" aria-pressed="true">
+                <i class="route-dir__swatch route-dir__swatch--out" aria-hidden="true"></i>
+                Đường đi
+              </button>
+              <button type="button" class="route-dir__btn" data-dir="back" aria-pressed="false">
+                <i class="route-dir__swatch route-dir__swatch--back" aria-hidden="true"></i>
+                Đường về
+              </button>
+            </div>
+            <p class="route-dir__hint" id="route-dir-hint">Đang hiện tuyến lên Kẹm · xanh</p>
             <div class="routes__legs" id="route-legs"></div>
           </div>
           <p class="rail__blurb" id="rail-blurb">—</p>
@@ -130,12 +144,30 @@
       </aside>
 
       <div class="hud glass" id="hud">
-        <div class="hud__time">
-          <span class="hud__label">Thời gian hành trình</span>
-          <strong id="hud-clock">15/08 · 08:30</strong>
+        <div class="hud__top">
+          <div class="hud__time">
+            <span class="hud__label">Thời gian hành trình</span>
+            <strong id="hud-clock">15/08 · 08:30</strong>
+          </div>
+          <div class="hud__controls">
+            <button type="button" class="hud__snap" id="hud-prev" aria-label="Mốc trước" title="Mốc trước">
+              ‹
+            </button>
+            <button type="button" class="hud__snap" id="hud-next" aria-label="Mốc sau" title="Mốc sau">
+              ›
+            </button>
+          </div>
         </div>
-        <div class="hud__track">
-          <div class="hud__ticks" id="hud-ticks" aria-hidden="true"></div>
+
+        <div class="hud__track" id="hud-track">
+          <div class="hud__rail" aria-hidden="true">
+            <i class="hud__fill" id="hud-fill"></i>
+            <span class="hud__glow" id="hud-glow"></span>
+          </div>
+          <div class="hud__ticks" id="hud-ticks"></div>
+          <span class="hud__playhead" id="hud-playhead" aria-hidden="true">
+            <span class="hud__car"></span>
+          </span>
           <input
             class="hud__scrub"
             id="time-scrub"
@@ -143,18 +175,93 @@
             min="0"
             max="1000"
             value="0"
+            step="1"
             aria-label="Kéo để xem giờ · địa điểm trên hành trình"
           />
         </div>
+
         <div class="hud__meta">
-          <span class="hud__place" id="hud-place">Southern Star</span>
-          <span class="hud__phase" id="hud-phase">Tập trung & xuất phát</span>
+          <div class="hud__now">
+            <span class="hud__place" id="hud-place">Southern Star</span>
+            <span class="hud__phase" id="hud-phase">Tập trung & xuất phát</span>
+          </div>
+          <span class="hud__pct" id="hud-pct">0%</span>
         </div>
+        <p class="hud__hint" id="hud-hint">Kéo thanh · bấm mốc · ‹ › để nhảy điểm dừng</p>
       </div>
 
       <div class="music-bg" id="music-dock" aria-hidden="true">
         <div id="yt-player"></div>
       </div>
+
+      <div class="auth-modal" id="auth-modal" aria-hidden="true" role="dialog" aria-labelledby="auth-title">
+        <div class="auth-modal__card glass">
+          <button type="button" class="auth-modal__x" id="auth-close" aria-label="Đóng">×</button>
+          <h2 id="auth-title">Đăng nhập để sửa điểm</h2>
+          <p class="auth-modal__lead">Chỉnh địa điểm tham quan tự do — thêm, xóa, đổi tọa độ.</p>
+          <form id="auth-form" class="auth-form" autocomplete="username">
+            <label>
+              <span>Tài khoản</span>
+              <input id="auth-user" name="username" type="text" required autocomplete="username" />
+            </label>
+            <label>
+              <span>Mật khẩu</span>
+              <input id="auth-pass" name="password" type="password" required autocomplete="current-password" />
+            </label>
+            <p class="auth-form__error" id="auth-error" role="alert"></p>
+            <div class="auth-form__actions">
+              <button type="button" class="btn-ghost" id="auth-cancel">Hủy</button>
+              <button type="submit" class="btn-solid">Đăng nhập</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <aside class="places-editor glass" id="places-editor" aria-hidden="true" aria-label="Sửa địa điểm">
+        <header class="places-editor__head">
+          <div>
+            <p class="places-editor__eyebrow">Biên tập hành trình</p>
+            <h2>Địa điểm tham quan</h2>
+          </div>
+          <div class="places-editor__head-actions">
+            <button type="button" class="btn-ghost" id="places-logout">Đăng xuất</button>
+            <button type="button" class="auth-modal__x" id="places-editor-close" aria-label="Đóng">×</button>
+          </div>
+        </header>
+        <p class="places-editor__status" id="places-editor-status"></p>
+        <div class="places-editor__toolbar">
+          <button type="button" class="btn-solid" id="places-add">+ Thêm điểm</button>
+          <button type="button" class="btn-ghost" id="places-reset">Khôi phục mặc định</button>
+        </div>
+        <ol class="places-editor__list" id="places-editor-list"></ol>
+        <form class="places-editor__form" id="places-editor-form">
+          <h3 id="places-form-title">Thêm điểm mới</h3>
+          <input type="hidden" name="id" />
+          <div class="places-grid">
+            <label><span>Tên</span><input name="name" required placeholder="Tên địa điểm" /></label>
+            <label><span>Vai trò</span><input name="role" placeholder="Trà chiều, nghỉ…" /></label>
+            <label><span>Ngày</span><input name="day" placeholder="15/08" /></label>
+            <label><span>Giờ</span><input name="time" placeholder="08:30 hoặc Trưa+" /></label>
+            <label class="places-grid__wide"><span>Địa chỉ ngắn</span><input name="place" placeholder="Hiện trên thẻ Maps" /></label>
+            <label class="places-grid__wide"><span>Mô tả</span><textarea name="blurb" rows="2" placeholder="Vài câu giới thiệu"></textarea></label>
+            <label><span>Lat</span><input name="lat" type="number" step="any" required /></label>
+            <label><span>Lng</span><input name="lng" type="number" step="any" required /></label>
+            <label class="places-grid__wide">
+              <span>Google Maps URL</span>
+              <input name="mapsUrl" placeholder="https://maps.app.goo.gl/…" />
+            </label>
+            <label><span>Màu</span><input name="color" type="color" value="#1F7A5C" /></label>
+            <label><span>Danh mục</span><input name="category" placeholder="Quán cà phê…" /></label>
+            <label class="places-grid__wide"><span>Địa chỉ đầy đủ</span><input name="address" /></label>
+            <label><span>Giờ mở</span><input name="hours" /></label>
+            <label><span>Điện thoại</span><input name="phone" /></label>
+          </div>
+          <div class="places-editor__form-actions">
+            <button type="button" class="btn-ghost" id="places-pick-btn">Chọn trên bản đồ</button>
+            <button type="submit" class="btn-solid">Lưu điểm</button>
+          </div>
+        </form>
+      </aside>
 
       <div class="boot" id="boot">
         <canvas id="boot-canvas" class="boot__canvas" aria-hidden="true"></canvas>
