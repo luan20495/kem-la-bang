@@ -447,6 +447,21 @@ html[data-grade='dawn'] .grade {
   padding: 0 0.15rem;
 }
 
+.route-seg__gmaps {
+  display: inline-block;
+  margin: 0.45rem 0.15rem 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--forest);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--forest) 35%, transparent);
+}
+
+.route-seg__gmaps:hover {
+  color: var(--ink);
+  border-bottom-color: var(--ink);
+}
+
 .route-seg__sum {
   font-size: 0.74rem;
   font-weight: 600;

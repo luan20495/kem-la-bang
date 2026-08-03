@@ -164,6 +164,8 @@ function renderRoutePicker(builtLegs, onPickCorridor) {
   }
 
   const active = options.find((o) => o.selected) || options[0];
+  const gmaps =
+    'https://www.google.com/maps/dir/?api=1&origin=20.9794135,105.8415574&destination=21.6227277,105.534959&travelmode=driving';
   host.innerHTML = `
     <div class="route-seg" role="radiogroup" aria-label="Chọn hành lang">
       ${options
@@ -180,6 +182,9 @@ function renderRoutePicker(builtLegs, onPickCorridor) {
       <span class="route-seg__sum">${active.summary}</span>
       <span class="route-seg__time">${active.time}</span>
     </p>
+    <a class="route-seg__gmaps" href="${gmaps}" target="_blank" rel="noopener noreferrer">
+      Tham khảo Google Maps · CT07
+    </a>
   `;
 
   host.querySelectorAll('.route-seg__btn').forEach((btn) => {

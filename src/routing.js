@@ -44,6 +44,12 @@ const LEG_VIAS = {
 
 const PREFERRED_CORRIDOR = 'Qua Cầu Vĩnh Tuy';
 
+/** Baked corridors inspired by Google Maps (CT07 via Vĩnh Tuy). */
+const BAKED_CORRIDORS = {
+  'xuat-phat>nghi-duong': 'routes/xuat-phat-nghi-duong-vinh-tuy.json',
+  'mua-qua>xuat-phat': 'routes/mua-qua-xuat-phat-vinh-tuy.json',
+};
+
 function formatKm(meters) {
   return `${(meters / 1000).toFixed(0)} km`;
 }
@@ -137,9 +143,15 @@ function labelAlternatives(routes) {
 
   return routes.map((r, i) => {
     let tag = r.tag || `Tuyến ${i + 1}`;
-    if (r === fastest) tag = 'Nhanh nhất';
-    else if (r === shortest && shortest !== fastest) tag = 'Ngắn nhất';
-    else if (r.tag) tag = r.tag;
+    if (r.preserveTag && r.tag) {
+      tag = r.tag;
+    } else if (r === fastest) {
+      tag = 'Nhanh nhất';
+    } else if (r === shortest && shortest !== fastest) {
+      tag = 'Ngắn nhất';
+    } else if (r.tag) {
+      tag = r.tag;
+    }
     return {
       ...r,
       id: i,
@@ -151,8 +163,34 @@ function labelAlternatives(routes) {
   });
 }
 
+async function loadBakedCorridor(legKey) {
+  const file = BAKED_CORRIDORS[legKey];
+  if (!file) return null;
+  try {
+    const base = import.meta.env.BASE_URL || './';
+    const res = await fetch(`${base}${file}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data?.coordinates?.length) return null;
+    return {
+      coordinates: data.coordinates,
+      distance: data.distance,
+      duration: data.duration,
+      tag: data.tag || PREFERRED_CORRIDOR,
+      preserveTag: true,
+      source: data.source || 'google-maps-inspired',
+      mapsUrl: data.mapsUrl,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchLegAlternatives(from, to, legKey) {
   const collected = [];
+
+  const baked = await loadBakedCorridor(legKey);
+  if (baked) collected.push(baked);
 
   try {
     const direct = await fetchOsrmOnce([from, to]);
@@ -167,7 +205,11 @@ export async function fetchLegAlternatives(from, to, legKey) {
       const mids = via.points || [{ lng: via.lng, lat: via.lat }];
       const viaRoutes = await fetchOsrmOnce([from, ...mids, to]);
       if (viaRoutes[0]) {
-        collected.push({ ...viaRoutes[0], tag: via.tag });
+        collected.push({
+          ...viaRoutes[0],
+          tag: via.tag,
+          preserveTag: via.tag === PREFERRED_CORRIDOR,
+        });
       }
     } catch {
       /* skip */
@@ -179,11 +221,13 @@ export async function fetchLegAlternatives(from, to, legKey) {
     unique = [fallbackCurve(from, to)];
   }
 
-  unique.sort((a, b) => a.duration - b.duration);
-
-  // Keep preferred corridor even if not among the 3 fastest
-  const preferred = unique.filter((r) => r.tag === PREFERRED_CORRIDOR);
-  const rest = unique.filter((r) => r.tag !== PREFERRED_CORRIDOR);
+  // Preferred / baked corridor first, then by duration
+  const preferred = unique.filter(
+    (r) => r.tag === PREFERRED_CORRIDOR || r.preserveTag || r.source === 'google-maps-inspired'
+  );
+  const rest = unique
+    .filter((r) => !preferred.includes(r))
+    .sort((a, b) => a.duration - b.duration);
   unique = [...preferred, ...rest].slice(0, 3);
 
   unique = unique.map((r) => ({
@@ -201,7 +245,12 @@ export async function buildAllLegs() {
     const legKey = `${leg.from}>${leg.to}`;
     try {
       const alternatives = await fetchLegAlternatives(from, to, legKey);
-      const preferIdx = alternatives.findIndex((a) => a.tag === PREFERRED_CORRIDOR);
+      const preferIdx = alternatives.findIndex(
+        (a) =>
+          a.tag === PREFERRED_CORRIDOR ||
+          a.source === 'google-maps-inspired' ||
+          a.preserveTag
+      );
       const selected = preferIdx >= 0 ? preferIdx : 0;
       const chosen = alternatives[selected];
       built.push({
