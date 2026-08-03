@@ -37,7 +37,8 @@ export function createPlacesEditor(opts) {
   function syncOpenBtn() {
     if (!btnOpen) return;
     btnOpen.classList.toggle('is-authed', isAuthed());
-    btnOpen.querySelector('.chip__label').textContent = isAuthed() ? 'Sửa điểm' : 'Sửa điểm';
+    const label = btnOpen.querySelector('.tb__txt, .chip__label');
+    if (label) label.textContent = 'Sửa';
   }
 
   function openLogin() {

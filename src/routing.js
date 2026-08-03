@@ -302,6 +302,7 @@ export async function fetchLegAlternatives(from, to, legKey) {
 
 export async function buildAllLegs() {
   const built = [];
+  const saved = loadRouteEdits();
   for (const leg of legs) {
     const from = byId[leg.from];
     const to = byId[leg.to];
@@ -311,14 +312,20 @@ export async function buildAllLegs() {
       const preferIdx = alternatives.findIndex((a) => a.tag === DEFAULT_CORRIDOR);
       const selected = preferIdx >= 0 ? preferIdx : 0;
       const chosen = alternatives[selected];
-      built.push({
+      const builtLeg = {
         ...leg,
         alternatives,
         selected,
         coordinates: chosen.coordinates,
         distance: chosen.distance,
         duration: chosen.duration,
-      });
+        waypoints: [],
+      };
+      const vias = saved[legKey];
+      if (vias?.length) {
+        await applyWaypointsToLeg(builtLeg, vias);
+      }
+      built.push(builtLeg);
     } catch {
       const fb = fallbackCurve(from, to);
       fb.coordinates = pinStops(fb.coordinates, from, to);
@@ -327,6 +334,7 @@ export async function buildAllLegs() {
         ...leg,
         alternatives,
         selected: 0,
+        waypoints: [],
         ...fb,
       });
     }
@@ -343,6 +351,218 @@ export function selectLegAlternative(leg, index) {
   leg.distance = alt.distance;
   leg.duration = alt.duration;
   return leg;
+}
+
+const EDIT_STORAGE = 'kem-route-edits-v1';
+const CUSTOM_TAG = 'Tùy chỉnh';
+const MAX_VIAS = 8;
+
+export function loadRouteEdits() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(EDIT_STORAGE) || '{}');
+    return raw && typeof raw === 'object' ? raw : {};
+  } catch {
+    return {};
+  }
+}
+
+export function saveRouteEdits(edits) {
+  localStorage.setItem(EDIT_STORAGE, JSON.stringify(edits));
+}
+
+export function clearRouteEdits() {
+  localStorage.removeItem(EDIT_STORAGE);
+}
+
+export function legKeyOf(leg) {
+  return `${leg.from}>${leg.to}`;
+}
+
+/** Snap a lng/lat onto the nearest drivible road (OSRM nearest). */
+export async function snapToRoad(lng, lat) {
+  const url = `https://router.project-osrm.org/nearest/v1/driving/${lng},${lat}?number=1`;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 5000);
+  try {
+    const res = await fetch(url, { signal: ctrl.signal });
+    if (!res.ok) throw new Error('nearest failed');
+    const data = await res.json();
+    const wp = data.waypoints?.[0];
+    if (!wp?.location) throw new Error('no nearest');
+    return { lng: wp.location[0], lat: wp.location[1], name: wp.name || '' };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Closest point on a polyline to a map click.
+ * @param {[number, number][]} coordinates GeoJSON [lng,lat][]
+ * @param {{lng:number,lat:number}} pt
+ */
+export function nearestPointOnLine(coordinates, pt) {
+  if (!coordinates?.length) return null;
+  let best = null;
+  for (let i = 0; i < coordinates.length - 1; i++) {
+    const a = coordinates[i];
+    const b = coordinates[i + 1];
+    const proj = projectOnSegment(pt, a, b);
+    const dist = haversine([pt.lng, pt.lat], [proj.lng, proj.lat]);
+    if (!best || dist < best.dist) {
+      best = { ...proj, index: i, dist, t: proj.t };
+    }
+  }
+  return best;
+}
+
+function projectOnSegment(pt, a, b) {
+  const ax = a[0];
+  const ay = a[1];
+  const bx = b[0];
+  const by = b[1];
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len2 = dx * dx + dy * dy || 1e-12;
+  let t = ((pt.lng - ax) * dx + (pt.lat - ay) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return { lng: ax + dx * t, lat: ay + dy * t, t };
+}
+
+/** Distance along polyline from start to vertex index + fraction toward next. */
+export function distanceAlongLine(coordinates, index, t = 0) {
+  let d = 0;
+  for (let i = 1; i <= index && i < coordinates.length; i++) {
+    d += haversine(coordinates[i - 1], coordinates[i]);
+  }
+  if (index < coordinates.length - 1 && t > 0) {
+    d += haversine(coordinates[index], coordinates[index + 1]) * t;
+  }
+  return d;
+}
+
+/**
+ * Re-route a leg through via waypoints (Google Maps–style pass-through points).
+ * Snaps each via to the road network, then OSRM driving route.
+ */
+export async function applyWaypointsToLeg(leg, waypoints) {
+  const from = byId[leg.from];
+  const to = byId[leg.to];
+  if (!from || !to) return leg;
+
+  const cleaned = (waypoints || [])
+    .slice(0, MAX_VIAS)
+    .map((w) => ({ lng: Number(w.lng), lat: Number(w.lat) }))
+    .filter((w) => Number.isFinite(w.lng) && Number.isFinite(w.lat));
+
+  leg.waypoints = cleaned;
+
+  if (!cleaned.length) {
+    // Restore preferred corridor if custom was selected
+    const preferIdx = leg.alternatives?.findIndex((a) => a.tag === DEFAULT_CORRIDOR);
+    const idx = preferIdx >= 0 ? preferIdx : 0;
+    selectLegAlternative(leg, idx);
+    // Drop custom alt
+    if (leg.alternatives) {
+      leg.alternatives = leg.alternatives.filter((a) => a.tag !== CUSTOM_TAG);
+      leg.alternatives.forEach((a, i) => {
+        a.id = i;
+      });
+    }
+    persistLegWaypoints(leg);
+    return leg;
+  }
+
+  // Snap vias to roads for Google Maps–like accuracy
+  const snapped = [];
+  for (const w of cleaned) {
+    try {
+      snapped.push(await snapToRoad(w.lng, w.lat));
+    } catch {
+      snapped.push(w);
+    }
+  }
+  leg.waypoints = snapped.map((w) => ({ lng: w.lng, lat: w.lat }));
+
+  let route;
+  try {
+    const routes = await fetchOsrmOnce([from, ...leg.waypoints, to]);
+    route = routes[0];
+  } catch {
+    route = fallbackCurve(from, to);
+  }
+
+  const custom = {
+    ...route,
+    coordinates: pinStops(route.coordinates, from, to),
+    tag: CUSTOM_TAG,
+    preserveTag: true,
+    source: 'osrm-edit',
+  };
+  const labeled = labelAlternatives([custom])[0];
+
+  if (!leg.alternatives) leg.alternatives = [];
+  const existing = leg.alternatives.findIndex((a) => a.tag === CUSTOM_TAG);
+  if (existing >= 0) leg.alternatives[existing] = { ...labeled, id: existing };
+  else {
+    leg.alternatives.push({ ...labeled, id: leg.alternatives.length });
+  }
+  const idx = leg.alternatives.findIndex((a) => a.tag === CUSTOM_TAG);
+  selectLegAlternative(leg, idx);
+  persistLegWaypoints(leg);
+  return leg;
+}
+
+function persistLegWaypoints(leg) {
+  const all = loadRouteEdits();
+  const key = legKeyOf(leg);
+  if (!leg.waypoints?.length) delete all[key];
+  else all[key] = leg.waypoints.map((w) => ({ lng: w.lng, lat: w.lat }));
+  saveRouteEdits(all);
+}
+
+/** Insert a via into a leg, ordered by position along the current path. */
+export async function insertViaOnLeg(leg, lng, lat) {
+  const coords = leg.coordinates || [];
+  const hit = nearestPointOnLine(coords, { lng, lat });
+  const along = hit ? distanceAlongLine(coords, hit.index, hit.t) : 0;
+
+  const withDist = (leg.waypoints || []).map((w) => {
+    const h = nearestPointOnLine(coords, w);
+    return {
+      w,
+      d: h ? distanceAlongLine(coords, h.index, h.t) : 0,
+    };
+  });
+  withDist.push({ w: { lng, lat }, d: along });
+  withDist.sort((a, b) => a.d - b.d);
+  const next = withDist.map((x) => x.w);
+  return applyWaypointsToLeg(leg, next);
+}
+
+export async function moveViaOnLeg(leg, viaIndex, lng, lat) {
+  const next = [...(leg.waypoints || [])];
+  if (viaIndex < 0 || viaIndex >= next.length) return leg;
+  next[viaIndex] = { lng, lat };
+  return applyWaypointsToLeg(leg, next);
+}
+
+export async function removeViaOnLeg(leg, viaIndex) {
+  const next = [...(leg.waypoints || [])];
+  if (viaIndex < 0 || viaIndex >= next.length) return leg;
+  next.splice(viaIndex, 1);
+  return applyWaypointsToLeg(leg, next);
+}
+
+export async function resetLegEdits(leg) {
+  return applyWaypointsToLeg(leg, []);
+}
+
+export async function resetAllRouteEdits(builtLegs) {
+  clearRouteEdits();
+  for (const leg of builtLegs || []) {
+    await applyWaypointsToLeg(leg, []);
+  }
+  return builtLegs;
 }
 
 /** Flatten legs into one cinema path + cumulative distances. */
@@ -483,4 +703,4 @@ function computeBearing(a, b) {
   return ((Math.atan2(y, x) * toDeg) + 360) % 360;
 }
 
-export { formatKm, formatMins, DEFAULT_CORRIDOR, CORRIDOR_BLURB };
+export { formatKm, formatMins, DEFAULT_CORRIDOR, CORRIDOR_BLURB, CUSTOM_TAG, MAX_VIAS };

@@ -1,7 +1,7 @@
 import gsap from 'gsap';
 import { Popup } from 'maplibre-gl';
 import { stops, trip } from './journey.js';
-import { buildAllLegs, buildCinemaPath, byId, selectLegAlternative, CORRIDOR_BLURB, rebuildById, attachNarrativeMap } from './routing.js';
+import { buildAllLegs, buildCinemaPath, byId, selectLegAlternative, CORRIDOR_BLURB, rebuildById, attachNarrativeMap, resetAllRouteEdits, CUSTOM_TAG, loadRouteEdits, saveRouteEdits, legKeyOf } from './routing.js';
 import {
   createMap,
   waitForMap,
@@ -16,13 +16,16 @@ import {
   getPadding,
   applyDayNight,
   setTraveler,
+  MAP_2D,
 } from './map3d.js';
 import { createAtmosphere, createBootScene } from './atmosphere.js';
 import { createCinemaController } from './cinema.js';
 import { createCarMarker, createDriveTour } from './drive.js';
+import { initCarPicker } from './car-picker.js';
 import { beatAt, SCRUB_STOPS, DRIVE_STOP_T, rebuildTimeline, TIMELINE } from './timeline.js';
 import { hydratePlaces } from './places-store.js';
 import { createPlacesEditor } from './editor.js';
+import { createRouteEditor } from './route-edit.js';
 import './style.css';
 
 hydratePlaces();
@@ -47,8 +50,10 @@ const state = {
   drive: null,
   car: null,
   builtLegs: null,
-  routeDir: 'out', // 'out' | 'back' — only one direction drawn at a time
+  routeDir: 'all', // 'all' | 'out' | 'back' — mặc định vẽ đủ từng đoạn
   routeDirPinned: false, // true after manual toggle until scrub/drive moves t
+  routeEditing: false,
+  routeEditor: null,
   photoTimer: null,
   photoPopup: null,
   reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
@@ -84,7 +89,11 @@ function updateSheet(stop) {
   const mapsImg = document.getElementById('rail-maps-img');
   const mapsTitle = document.getElementById('rail-maps-title');
   const mapsPlace = document.getElementById('rail-maps-place');
-  if (blurb) blurb.textContent = stop.blurb;
+  if (blurb) {
+    const text = (stop.blurb || '').trim();
+    blurb.textContent = text || '';
+    blurb.hidden = !text || text === '—';
+  }
   if (maps) {
     maps.href = stop.mapsUrl;
     maps.style.setProperty('--cta', stop.color);
@@ -108,7 +117,7 @@ function corridorOptions(builtLegs) {
   const removed = getRemovedCorridors();
   const primary = choosable.find((l) => !l.return) || choosable[0];
   return primary.alternatives
-    .filter((alt) => !removed.has(alt.tag))
+    .filter((alt) => !removed.has(alt.tag) && alt.tag !== CUSTOM_TAG)
     .map((alt, index) => {
     const short = alt.tag;
     const go = choosable.find((l) => !l.return);
@@ -153,13 +162,28 @@ function setRemovedCorridors(tags) {
 }
 
 function applyCorridor(builtLegs, tag) {
+  const all = loadRouteEdits();
+  let changed = false;
   builtLegs.forEach((leg) => {
     // Only long-haul HN↔Kẹm hops follow the 3 corridor styles
     if (!leg.longHaul && !leg.return) return;
     if ((leg.alternatives?.length || 0) < 2) return;
+    if (leg.waypoints?.length) {
+      leg.waypoints = [];
+      leg.alternatives = (leg.alternatives || []).filter((a) => a.tag !== CUSTOM_TAG);
+      leg.alternatives.forEach((a, i) => {
+        a.id = i;
+      });
+    }
+    const key = legKeyOf(leg);
+    if (all[key]) {
+      delete all[key];
+      changed = true;
+    }
     const idx = leg.alternatives.findIndex((a) => a.tag === tag);
     if (idx >= 0) selectLegAlternative(leg, idx);
   });
+  if (changed) saveRouteEdits(all);
 }
 
 function ensureSelectedVisible(builtLegs) {
@@ -175,19 +199,21 @@ function ensureSelectedVisible(builtLegs) {
 function renderRoutePicker(builtLegs, handlers = {}) {
   const { onPickCorridor, onRemoveCorridor, onRestoreCorridors } = handlers;
   const host = document.getElementById('route-legs');
-  const label = document.querySelector('.routes__label');
+  const label = document.querySelector('.routes-fold__sum > span:first-child');
+  const fold = document.getElementById('routes-fold');
   if (!host) return;
 
   const removed = getRemovedCorridors();
   const options = corridorOptions(builtLegs);
   if (!options.length && !removed.size) {
-    if (label) label.hidden = true;
+    if (fold) fold.hidden = true;
+    if (label) label.textContent = 'Tuyến đường';
     host.innerHTML = '';
     return;
   }
 
+  if (fold) fold.hidden = false;
   if (label) {
-    label.hidden = false;
     label.textContent = `Tuyến lên Kẹm · ${options.length} lựa chọn`;
   }
 
@@ -261,14 +287,16 @@ function syncRouteDirUi(dir) {
   const hint = document.getElementById('route-dir-hint');
   if (hint) {
     hint.textContent =
-      dir === 'out'
-        ? 'Đang hiện tuyến lên Kẹm · xanh'
-        : 'Đang hiện tuyến về Hà Nội · cam nét đứt';
+      dir === 'all'
+        ? 'Đang hiện đủ từng đoạn · màu theo chặng'
+        : dir === 'out'
+          ? 'Chỉ chặng đi / nội vùng · ẩn đường về'
+          : 'Chỉ đường về Hà Nội · cam nét đứt';
   }
 }
 
 function applyRouteDir(dir, { pin = false } = {}) {
-  if (dir !== 'out' && dir !== 'back') return;
+  if (dir !== 'all' && dir !== 'out' && dir !== 'back') return;
   if (pin) state.routeDirPinned = true;
   const changed = state.routeDir !== dir;
   state.routeDir = dir;
@@ -281,18 +309,17 @@ function applyRouteDir(dir, { pin = false } = {}) {
   }
 }
 
-/** Return leg starts near the last stop before heading home. */
-function routeDirFromT(t) {
-  const last = stops[stops.length - 1];
-  const threshold = (DRIVE_STOP_T[last?.id] ?? 0.84) - 0.02;
-  return t >= threshold ? 'back' : 'out';
+/** Keep all segments visible while scrubbing unless user filtered manually. */
+function routeDirFromT(_t) {
+  return 'all';
 }
 
 function updateRailMeta() {
-  const el = document.getElementById('rail-meta');
-  if (!el) return;
   const n = stops.length;
-  el.textContent = `${n} điểm · chỉnh tự do · về điểm đầu`;
+  const el = document.getElementById('rail-meta');
+  if (el) el.textContent = `${n} điểm · chỉnh tự do · về điểm đầu`;
+  const fab = document.getElementById('rail-fab-meta');
+  if (fab) fab.textContent = `${n} điểm`;
 }
 
 function setHud(t, overrides = {}) {
@@ -631,8 +658,8 @@ function selectStop(id, { fly = true, photos = true } = {}) {
     state.map.flyTo({
       center: [stop.lng, stop.lat],
       zoom: 13.4,
-      pitch: 46,
-      bearing: state.map.getBearing(),
+      pitch: MAP_2D.pitch,
+      bearing: MAP_2D.bearing,
       duration: state.reducedMotion ? 0 : 1400,
       essential: true,
     });
@@ -646,13 +673,15 @@ function setDriveBtn(on) {
   const btn = document.getElementById('btn-drive');
   btn.classList.toggle('is-on', on);
   btn.setAttribute('aria-pressed', String(on));
-  btn.querySelector('.chip__cinema-label').textContent = on ? 'Đang lái…' : 'Lái xe';
+  const label = document.getElementById('btn-drive-label');
+  if (label) label.textContent = on ? 'Dừng' : 'Lái';
+  btn.title = on ? 'Dừng tour lái xe' : 'Lái tour theo lộ trình';
 }
 
 function initMusic() {
   const toggle = document.getElementById('music-toggle');
   const dock = document.getElementById('music-dock');
-  const label = toggle.querySelector('.chip__label');
+  const label = document.getElementById('music-toggle-label') || toggle.querySelector('.tb__txt');
   let playing = false;
   let player = null;
   let apiReady = null;
@@ -703,7 +732,8 @@ function initMusic() {
             setPlaying(e.data === window.YT.PlayerState.PLAYING);
           },
           onError: () => {
-            label.textContent = 'Mở YouTube';
+            label.textContent = 'Nhạc';
+            toggle.title = 'Mở YouTube';
             window.open(trip.youtubeUrl, '_blank', 'noopener,noreferrer');
           },
         },
@@ -716,7 +746,8 @@ function initMusic() {
     playing = on;
     toggle.setAttribute('aria-pressed', String(on));
     toggle.classList.toggle('is-playing', on);
-    label.textContent = on ? 'Nhạc nền' : 'Phát nhạc';
+    label.textContent = on ? 'Nhạc' : 'Nhạc';
+    toggle.title = on ? 'Tắt nhạc nền' : 'Bật nhạc nền';
     document.body.classList.toggle('music-on', on);
   }
 
@@ -735,7 +766,7 @@ function initMusic() {
 function choreographUI() {
   const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
   tl.from('.rail', { x: -40, opacity: 0, duration: 0.95 }, 0)
-    .from('.topbar__actions .chip', { y: 18, opacity: 0, duration: 0.7, stagger: 0.08 }, 0.12)
+    .from('.tb .tb__btn', { y: 14, opacity: 0, duration: 0.55, stagger: 0.05 }, 0.12)
     .from('.brand--mobile', { y: 24, opacity: 0, duration: 0.8 }, 0)
     .from('.hud', { y: 30, opacity: 0, duration: 0.8 }, 0.3);
 }
@@ -772,7 +803,16 @@ async function main() {
   state.markers = createStopMarkers(map, (id) => selectStop(id));
   state.car = createCarMarker(map, stops[0].lng, stops[0].lat);
   if (import.meta.env.DEV) {
-    window.__kem = { map, car: state.car };
+    window.__kem = {
+      map,
+      car: state.car,
+      get builtLegs() {
+        return state.builtLegs;
+      },
+      get routeEditing() {
+        return state.routeEditing;
+      },
+    };
   }
 
   rebuildPathControllers(map);
@@ -818,7 +858,7 @@ async function main() {
   ensureSelectedVisible(builtLegs);
   refreshRouteGeometry(map, builtLegs, getRemovedCorridors(), state.routeDir);
   renderRoutePicker(builtLegs, routePickerHandlers);
-  applyRouteDir('out');
+  applyRouteDir('all');
   updateRailMeta();
   renderHudTicks();
   setHud(0);
@@ -827,6 +867,79 @@ async function main() {
     btn.addEventListener('click', () => {
       applyRouteDir(btn.dataset.dir, { pin: true });
     });
+  });
+
+  function syncRouteEditUi() {
+    const btn = document.getElementById('btn-route-edit');
+    const reset = document.getElementById('btn-route-reset');
+    const hint = document.getElementById('route-edit-hint');
+    const on = state.routeEditing;
+    if (btn) {
+      btn.setAttribute('aria-pressed', String(on));
+      btn.textContent = on ? 'Xong chỉnh' : 'Chỉnh tuyến';
+    }
+    if (reset) reset.hidden = !on;
+    if (hint) hint.hidden = !on;
+    const dirHint = document.getElementById('route-dir-hint');
+    if (dirHint && on) {
+      dirHint.textContent = 'Chế độ chỉnh · kéo đường để khớp Google Maps–style';
+    } else if (dirHint && !on) {
+      syncRouteDirUi(state.routeDir);
+    }
+  }
+
+  function setRouteEditing(on) {
+    state.routeEditing = Boolean(on);
+    state.routeEditor?.setEnabled(state.routeEditing);
+    if (state.routeEditing) {
+      map.doubleClickZoom.disable();
+      const fold = document.getElementById('routes-fold');
+      if (fold) fold.open = true;
+      if (state.drive?.running) {
+        state.drive.stop();
+        hidePhotos();
+        setDriveBtn(false);
+      }
+      document.getElementById('hud-phase').textContent = 'Chỉnh tuyến · kéo đường';
+    } else {
+      map.doubleClickZoom.enable();
+    }
+    syncRouteEditUi();
+  }
+
+  state.routeEditor = createRouteEditor({
+    map,
+    getBuiltLegs: () => state.builtLegs,
+    getEnabled: () => state.routeEditing,
+    onAfterEdit: () => {
+      refreshRouteGeometry(map, state.builtLegs, getRemovedCorridors(), state.routeDir);
+      rebuildPathControllers(map);
+      renderRoutePicker(state.builtLegs, routePickerHandlers);
+      state.routeEditor?.refreshVias();
+      const custom = (state.builtLegs || []).some((l) => (l.waypoints || []).length);
+      document.getElementById('hud-phase').textContent = custom
+        ? 'Đã uốn tuyến · khớp đường'
+        : 'Đã khôi phục tuyến gốc';
+    },
+    onStatus: (msg) => {
+      const el = document.getElementById('hud-phase');
+      if (el && msg) el.textContent = msg;
+    },
+  });
+
+  document.getElementById('btn-route-edit')?.addEventListener('click', () => {
+    setRouteEditing(!state.routeEditing);
+  });
+
+  document.getElementById('btn-route-reset')?.addEventListener('click', async () => {
+    if (!state.builtLegs) return;
+    document.getElementById('hud-phase').textContent = 'Đang xóa điểm uốn…';
+    await resetAllRouteEdits(state.builtLegs);
+    refreshRouteGeometry(map, state.builtLegs, getRemovedCorridors(), state.routeDir);
+    rebuildPathControllers(map);
+    renderRoutePicker(state.builtLegs, routePickerHandlers);
+    state.routeEditor?.refreshVias();
+    document.getElementById('hud-phase').textContent = 'Đã xóa mọi điểm uốn';
   });
 
   async function rebuildPlacesJourney() {
@@ -855,6 +968,7 @@ async function main() {
     state.builtLegs = built;
     ensureSelectedVisible(built);
     refreshRouteGeometry(map, built, getRemovedCorridors(), state.routeDir);
+    state.routeEditor?.refreshVias();
     rebuildPathControllers(map);
     renderRoutePicker(built, routePickerHandlers);
     renderTimeline((id) => selectStop(id));
@@ -875,7 +989,7 @@ async function main() {
     }
   });
 
-  document.getElementById('btn-overview').addEventListener('click', () => {
+  document.getElementById('btn-overview')?.addEventListener('click', () => {
     state.drive?.stop();
     hidePhotos();
     setDriveBtn(false);
@@ -883,8 +997,8 @@ async function main() {
     fitJourney(map, getPadding());
   });
 
-  document.getElementById('btn-drive').addEventListener('click', () => {
-    if (state.drive.running) {
+  document.getElementById('btn-drive')?.addEventListener('click', () => {
+    if (state.drive?.running) {
       state.drive.stop();
       hidePhotos();
       setDriveBtn(false);
@@ -895,14 +1009,37 @@ async function main() {
     state.drive.start();
   });
 
+  const carModelBtn = document.getElementById('btn-car-model');
+  const carModelLabel = document.getElementById('btn-car-model-label');
+  const syncCarLabel = () => {
+    if (!carModelLabel || !state.car) return;
+    // Keep toolbar short — model name lives in title / garage
+    carModelLabel.textContent = 'Xe';
+    const name = state.car.modelLabel || 'Xe';
+    const blurb = state.car.modelBlurb || 'Chọn xe trong garage';
+    carModelBtn?.setAttribute('title', `${name} · ${blurb}`);
+  };
+  const carPicker = initCarPicker({
+    getSelectedId: () => state.car?.modelId,
+    onSelect: async (id) => {
+      if (!state.car?.setModel) return;
+      carModelBtn.disabled = true;
+      await state.car.setModel(id);
+      syncCarLabel();
+      carModelBtn.disabled = false;
+    },
+  });
+  syncCarLabel();
+  carModelBtn?.addEventListener('click', () => carPicker.open());
+
   const hudEl = document.getElementById('hud');
   const scrubEl = document.getElementById('time-scrub');
   const endScrub = () => hudEl?.classList.remove('is-scrubbing');
-  scrubEl.addEventListener('pointerdown', () => hudEl?.classList.add('is-scrubbing'));
-  scrubEl.addEventListener('pointerup', endScrub);
-  scrubEl.addEventListener('pointercancel', endScrub);
-  scrubEl.addEventListener('blur', endScrub);
-  scrubEl.addEventListener('input', (e) => {
+  scrubEl?.addEventListener('pointerdown', () => hudEl?.classList.add('is-scrubbing'));
+  scrubEl?.addEventListener('pointerup', endScrub);
+  scrubEl?.addEventListener('pointercancel', endScrub);
+  scrubEl?.addEventListener('blur', endScrub);
+  scrubEl?.addEventListener('input', (e) => {
     if (state.drive?.running) return;
     state.routeDirPinned = false;
     const t = Number(e.target.value) / 1000;
@@ -911,6 +1048,79 @@ async function main() {
   });
   document.getElementById('hud-prev')?.addEventListener('click', () => snapHud(-1));
   document.getElementById('hud-next')?.addEventListener('click', () => snapHud(1));
+
+  const KEY_HUD = 'kem-hud-expanded';
+  const KEY_RAIL = 'kem-rail-collapsed';
+  const KEY_ROUTES = 'kem-routes-open';
+
+  function syncHudExpandUi() {
+    const hud = document.getElementById('hud');
+    const btn = document.getElementById('hud-expand');
+    if (!hud || !btn) return;
+    const compact = hud.classList.contains('is-compact');
+    btn.setAttribute('aria-expanded', compact ? 'false' : 'true');
+    btn.setAttribute('aria-label', compact ? 'Mở rộng thanh hành trình' : 'Thu gọn thanh hành trình');
+    btn.title = compact ? 'Mở rộng' : 'Thu gọn';
+  }
+
+  function setHudCompact(compact, { persist = true, refit = false } = {}) {
+    const hud = document.getElementById('hud');
+    if (!hud) return;
+    hud.classList.toggle('is-compact', compact);
+    if (persist) {
+      try {
+        sessionStorage.setItem(KEY_HUD, compact ? '0' : '1');
+      } catch {
+        /* ignore */
+      }
+    }
+    syncHudExpandUi();
+    if (refit && state.map) fitJourney(state.map, getPadding());
+  }
+
+  function setRailCollapsed(collapsed, { persist = true, refit = false } = {}) {
+    const rail = document.getElementById('rail');
+    const fab = document.getElementById('rail-fab');
+    if (!rail || !fab) return;
+    rail.classList.toggle('is-collapsed', collapsed);
+    rail.hidden = collapsed;
+    fab.hidden = !collapsed;
+    fab.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    if (!collapsed) {
+      gsap.set(rail, { clearProps: 'opacity,transform,x' });
+    }
+    if (persist) {
+      try {
+        sessionStorage.setItem(KEY_RAIL, collapsed ? '1' : '0');
+      } catch {
+        /* ignore */
+      }
+    }
+    if (refit && state.map) fitJourney(state.map, getPadding());
+  }
+
+  try {
+    setHudCompact(sessionStorage.getItem(KEY_HUD) !== '1', { persist: false, refit: false });
+    setRailCollapsed(sessionStorage.getItem(KEY_RAIL) === '1', { persist: false, refit: false });
+    const routesFold = document.getElementById('routes-fold');
+    if (routesFold && sessionStorage.getItem(KEY_ROUTES) === '1') routesFold.open = true;
+  } catch {
+    syncHudExpandUi();
+  }
+
+  document.getElementById('hud-expand')?.addEventListener('click', () => {
+    const hud = document.getElementById('hud');
+    setHudCompact(!hud?.classList.contains('is-compact'));
+  });
+  document.getElementById('rail-collapse')?.addEventListener('click', () => setRailCollapsed(true));
+  document.getElementById('rail-fab')?.addEventListener('click', () => setRailCollapsed(false));
+  document.getElementById('routes-fold')?.addEventListener('toggle', (e) => {
+    try {
+      sessionStorage.setItem(KEY_ROUTES, e.currentTarget.open ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  });
 
   window.addEventListener('keydown', (e) => {
     if (e.target.closest('input, textarea, button')) return;

@@ -1,11 +1,10 @@
 import gsap from 'gsap';
 import { stops } from './journey.js';
 import { byId, bearingAlongPath, bearingBetween } from './routing.js';
-import { applyDayNight } from './map3d.js';
-import { createCar3D } from './car3d.js';
+import { applyDayNight, MAP_2D } from './map3d.js';
 import { DRIVE_STOP_T } from './timeline.js';
 
-export { createCar3D as createCarMarker };
+export { createCar3D as createCarMarker, CAR_MODELS } from './car3d.js';
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -91,14 +90,14 @@ export function createDriveTour({
     car.setDriving(false);
     chase.primed = false;
     if (wasRunning) {
-      map.easeTo({ pitch: 28, bearing: map.getBearing(), duration: 700, essential: true });
+      map.easeTo({ pitch: MAP_2D.pitch, bearing: MAP_2D.bearing, duration: 700, essential: true });
     }
   }
 
   function primeChase(lng, lat) {
     chase.lng = lng;
     chase.lat = lat;
-    chase.bearing = map.getBearing();
+    chase.bearing = MAP_2D.bearing;
     chase.primed = true;
   }
 
@@ -167,8 +166,8 @@ export function createDriveTour({
     map.easeTo({
       center: [stop.lng, stop.lat],
       zoom: Math.max(map.getZoom(), 13.2),
-      pitch: 40,
-      bearing: map.getBearing(),
+      pitch: MAP_2D.pitch,
+      bearing: MAP_2D.bearing,
       duration: 750,
       essential: true,
     });
@@ -194,8 +193,8 @@ export function createDriveTour({
     map.jumpTo({
       center: [first.lng, first.lat],
       zoom: Math.max(map.getZoom(), 12.5),
-      pitch: 40,
-      bearing: map.getBearing(),
+      pitch: MAP_2D.pitch,
+      bearing: MAP_2D.bearing,
     });
     await visitStop(first.id, { showPhotos: true });
     if (aborted) return;
@@ -212,8 +211,8 @@ export function createDriveTour({
       const durationSec = Math.min(24, Math.max(8, km * 0.4));
       map.easeTo({
         zoom: km > 40 ? 10.8 : 11.8,
-        pitch: 38,
-        bearing: map.getBearing(),
+        pitch: MAP_2D.pitch,
+        bearing: MAP_2D.bearing,
         duration: 600,
         essential: true,
       });
@@ -237,8 +236,8 @@ export function createDriveTour({
       const durationSec = Math.min(26, Math.max(12, km * 0.26));
       map.easeTo({
         zoom: 10.6,
-        pitch: 36,
-        bearing: map.getBearing(),
+        pitch: MAP_2D.pitch,
+        bearing: MAP_2D.bearing,
         duration: 600,
         essential: true,
       });

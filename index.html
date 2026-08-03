@@ -2,7 +2,13 @@
 <html lang="vi">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
     <meta
       name="description"
       content="Kẹm — hành trình 15–16/08/2026: bản đồ, lái xe qua các điểm dừng, nhạc nền."
@@ -36,7 +42,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,700;1,9..144,500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,700;1,9..144,500&display=swap"
       rel="stylesheet"
     />
   </head>
@@ -56,26 +62,74 @@
           <p class="brand__tag">Đi giữa trời rực rỡ</p>
         </div>
 
-        <div class="topbar__actions">
-          <button class="chip glass" type="button" id="btn-overview">Toàn cảnh</button>
-          <button class="chip chip--cinema" type="button" id="btn-drive" aria-pressed="false">
-            <span class="chip__pulse" aria-hidden="true"></span>
-            <span class="chip__cinema-label">Lái xe</span>
+        <nav class="tb glass" aria-label="Điều khiển nhanh">
+          <button class="tb__btn" type="button" id="btn-overview" title="Tổng quan cả hành trình">
+            <span class="tb__ico" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M4 9.5 12 4l8 5.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1V9.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+            </span>
+            <span class="tb__txt">Tổng</span>
           </button>
-          <button class="chip chip--music" type="button" id="music-toggle" aria-pressed="false">
-            <span class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-            <span class="chip__label">Phát nhạc</span>
+          <button class="tb__btn tb__btn--drive" type="button" id="btn-drive" aria-pressed="false" title="Lái tour theo lộ trình">
+            <span class="tb__pulse" aria-hidden="true"></span>
+            <span class="tb__ico" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M5 16h14l-1.2-4.2A3 3 0 0 0 14.9 10H9.1a3 3 0 0 0-2.9 1.8L5 16Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="7.5" cy="16.5" r="1.4" fill="currentColor"/><circle cx="16.5" cy="16.5" r="1.4" fill="currentColor"/></svg>
+            </span>
+            <span class="tb__txt" id="btn-drive-label">Lái</span>
           </button>
-          <button class="chip glass" type="button" id="btn-edit-places" title="Đăng nhập để sửa địa điểm">
-            <span class="chip__label">Sửa điểm</span>
+          <button class="tb__btn tb__btn--music" type="button" id="music-toggle" aria-pressed="false" title="Bật / tắt nhạc nền">
+            <span class="tb__ico" aria-hidden="true">
+              <span class="eq"><i></i><i></i><i></i><i></i></span>
+            </span>
+            <span class="tb__txt" id="music-toggle-label">Nhạc</span>
           </button>
-        </div>
+          <button class="tb__btn" type="button" id="btn-car-model" title="Chọn xe trong garage">
+            <span class="tb__ico" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M7 15h10M8.5 11.5h7M6 18h12a1 1 0 0 0 1-1v-3.2a2 2 0 0 0-.4-1.2l-1.8-2.4A2 2 0 0 0 15.2 9H8.8a2 2 0 0 0-1.6.8L5.4 12.2a2 2 0 0 0-.4 1.2V17a1 1 0 0 0 1 1Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="8" cy="15.5" r="1.15" fill="currentColor"/><circle cx="16" cy="15.5" r="1.15" fill="currentColor"/></svg>
+            </span>
+            <span class="tb__txt" id="btn-car-model-label">Xe</span>
+          </button>
+          <button class="tb__btn" type="button" id="btn-edit-places" title="Chỉnh điểm dừng">
+            <span class="tb__ico" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none"><path d="m14.1 5.1 4.8 4.8M4 20l.7-3.8L15.6 5.3a1.6 1.6 0 0 1 2.3 0l.8.8a1.6 1.6 0 0 1 0 2.3L7.8 19.3 4 20Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+            </span>
+            <span class="tb__txt">Sửa</span>
+          </button>
+        </nav>
       </header>
 
-      <aside class="rail glass" aria-label="Các điểm dừng">
+      <button
+        type="button"
+        class="rail-fab glass"
+        id="rail-fab"
+        hidden
+        aria-label="Mở bảng hành trình"
+        title="Mở hành trình"
+      >
+        <span class="rail-fab__mark">Kẹm</span>
+        <span class="rail-fab__meta" id="rail-fab-meta">4 điểm</span>
+      </button>
+
+      <aside class="rail glass" id="rail" aria-label="Các điểm dừng">
         <header class="brand brand--rail">
           <div class="brand__row">
             <p class="brand__dates">15 → 16 · 08 · 2026</p>
+            <button
+              type="button"
+              class="rail__fold"
+              id="rail-collapse"
+              aria-label="Thu gọn bảng hành trình"
+              title="Thu gọn"
+            >
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" aria-hidden="true">
+                <path
+                  d="M15 6l-6 6 6 6"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </button>
           </div>
           <h1 class="brand__name">Kẹm</h1>
           <p class="brand__tag">Đi giữa trời rực rỡ</p>
@@ -86,21 +140,41 @@
         </div>
         <ol class="timeline" id="timeline"></ol>
         <div class="rail__foot">
-          <div class="routes" id="route-picker">
-            <p class="routes__label">Tuyến đường</p>
-            <div class="route-dir" id="route-dir" role="group" aria-label="Chiều đường trên bản đồ">
-              <button type="button" class="route-dir__btn is-on" data-dir="out" aria-pressed="true">
-                <i class="route-dir__swatch route-dir__swatch--out" aria-hidden="true"></i>
-                Đường đi
-              </button>
-              <button type="button" class="route-dir__btn" data-dir="back" aria-pressed="false">
-                <i class="route-dir__swatch route-dir__swatch--back" aria-hidden="true"></i>
-                Đường về
-              </button>
+          <details class="routes-fold" id="routes-fold">
+            <summary class="routes-fold__sum">
+              <span>Tuyến đường</span>
+              <span class="routes-fold__chev" aria-hidden="true"></span>
+            </summary>
+            <div class="routes" id="route-picker">
+              <div class="route-dir" id="route-dir" role="group" aria-label="Chiều đường trên bản đồ">
+                <button type="button" class="route-dir__btn is-on" data-dir="all" aria-pressed="true">
+                  <i class="route-dir__swatch route-dir__swatch--all" aria-hidden="true"></i>
+                  Tất cả
+                </button>
+                <button type="button" class="route-dir__btn" data-dir="out" aria-pressed="false">
+                  <i class="route-dir__swatch route-dir__swatch--out" aria-hidden="true"></i>
+                  Đường đi
+                </button>
+                <button type="button" class="route-dir__btn" data-dir="back" aria-pressed="false">
+                  <i class="route-dir__swatch route-dir__swatch--back" aria-hidden="true"></i>
+                  Đường về
+                </button>
+              </div>
+              <p class="route-dir__hint" id="route-dir-hint">Đang hiện đủ từng đoạn · màu theo chặng</p>
+              <div class="route-edit" id="route-edit">
+                <button type="button" class="route-edit__btn" id="btn-route-edit" aria-pressed="false">
+                  Chỉnh tuyến
+                </button>
+                <button type="button" class="route-edit__btn route-edit__btn--ghost" id="btn-route-reset" hidden>
+                  Xóa uốn
+                </button>
+              </div>
+              <p class="route-edit__hint" id="route-edit-hint" hidden>
+                Kéo đường để uốn · kéo chấm trắng để chỉnh · double-click để xóa · khớp OSRM như Google Maps
+              </p>
+              <div class="routes__legs" id="route-legs"></div>
             </div>
-            <p class="route-dir__hint" id="route-dir-hint">Đang hiện tuyến lên Kẹm · xanh</p>
-            <div class="routes__legs" id="route-legs"></div>
-          </div>
+          </details>
           <p class="rail__blurb" id="rail-blurb">—</p>
           <a
             class="maps-cta"
@@ -143,7 +217,7 @@
         </div>
       </aside>
 
-      <div class="hud glass" id="hud">
+      <div class="hud glass is-compact" id="hud">
         <div class="hud__top">
           <div class="hud__time">
             <span class="hud__label">Thời gian hành trình</span>
@@ -155,6 +229,24 @@
             </button>
             <button type="button" class="hud__snap" id="hud-next" aria-label="Mốc sau" title="Mốc sau">
               ›
+            </button>
+            <button
+              type="button"
+              class="hud__snap hud__expand"
+              id="hud-expand"
+              aria-expanded="false"
+              aria-label="Mở rộng thanh hành trình"
+              title="Mở rộng"
+            >
+              <svg class="hud__expand-ico" viewBox="0 0 24 24" width="16" height="16" fill="none" aria-hidden="true">
+                <path
+                  d="M6 14l6-6 6 6"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
             </button>
           </div>
         </div>
@@ -261,6 +353,18 @@
             <button type="submit" class="btn-solid">Lưu điểm</button>
           </div>
         </form>
+      </aside>
+
+      <aside class="car-picker glass" id="car-picker" aria-hidden="true" aria-label="Chọn xe">
+        <header class="car-picker__head">
+          <div>
+            <p class="car-picker__eyebrow">Garage Kẹm</p>
+            <h2 class="car-picker__title">Chọn xe của bạn</h2>
+          </div>
+          <button type="button" class="auth-modal__x" id="car-picker-close" aria-label="Đóng">×</button>
+        </header>
+        <p class="car-picker__lead">10 mẫu Kenney · sơn chuẩn quốc tế · preview 3D thật</p>
+        <div class="car-picker__grid" id="car-picker-grid" role="listbox" aria-label="Danh sách xe"></div>
       </aside>
 
       <div class="boot" id="boot">

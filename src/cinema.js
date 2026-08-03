@@ -1,6 +1,6 @@
 import gsap from 'gsap';
 import { pointAlongPath, narrativeToPathT } from './routing.js';
-import { applyDayNight, setTraveler } from './map3d.js';
+import { applyDayNight, setTraveler, MAP_2D } from './map3d.js';
 import { beatAt } from './timeline.js';
 
 export function phaseAt(t) {
@@ -26,32 +26,33 @@ export function createCinemaController({ map, path, onStopHint, onTick }) {
 
   function softCam(lng, lat, bearing, { duration = 0, hard = false } = {}) {
     if (hard || state.camBearing == null) {
-      state.camBearing = map.getBearing();
+      state.camBearing = MAP_2D.bearing;
       state.camLng = lng;
       state.camLat = lat;
     } else if (duration > 0) {
-      // Scrub: pan to place, keep current map bearing (no spin)
+      // Scrub: pan to place, north-up 2D
       state.camLng = lng;
       state.camLat = lat;
-      state.camBearing = map.getBearing();
+      state.camBearing = MAP_2D.bearing;
       map.easeTo({
         center: [lng, lat],
-        bearing: state.camBearing,
-        pitch: Math.min(42, Math.max(map.getPitch(), 28)),
+        bearing: MAP_2D.bearing,
+        pitch: MAP_2D.pitch,
         zoom: map.getZoom() < 10 ? 11.4 : map.getZoom(),
         duration,
         essential: true,
       });
       return;
     } else {
-      // Continuous play: soft pan only — bearing locked
+      // Continuous play: soft pan only — north locked
       state.camLng += (lng - state.camLng) * 0.1;
       state.camLat += (lat - state.camLat) * 0.1;
     }
 
     map.jumpTo({
       center: [state.camLng, state.camLat],
-      bearing: state.camBearing,
+      bearing: MAP_2D.bearing,
+      pitch: MAP_2D.pitch,
     });
   }
 

@@ -48,7 +48,7 @@ const DEFAULT_STOPS = [
     lat: 20.9794135,
     lng: 105.8415574,
     mapsUrl: 'https://maps.app.goo.gl/AVMVcpGpbDYfXuxW9',
-    color: '#FFC247',
+    color: '#FF9F0A',
     category: 'Chung cư',
     rating: 3.4,
     reviews: 34,
@@ -72,7 +72,7 @@ const DEFAULT_STOPS = [
     lat: 21.6227277,
     lng: 105.534959,
     mapsUrl: 'https://maps.app.goo.gl/hxBp9wbi6RPUZM216',
-    color: '#1F7A5C',
+    color: '#248A3D',
     category: 'Nhà hàng · Homestay',
     rating: 4.6,
     reviews: 50,
@@ -98,7 +98,7 @@ const DEFAULT_STOPS = [
     lat: 21.58685,
     lng: 105.70005,
     mapsUrl: 'https://maps.app.goo.gl/NL9yKLToKoEF29W26',
-    color: '#2F7FB5',
+    color: '#007AFF',
     category: 'Quán cà phê',
     rating: 4.9,
     reviews: 88,
@@ -124,7 +124,7 @@ const DEFAULT_STOPS = [
     lat: 21.6480136,
     lng: 105.5634686,
     mapsUrl: 'https://maps.app.goo.gl/sYb8Kx9AEAnUwKqX6',
-    color: '#6AA33A',
+    color: '#34C759',
     category: 'Xưởng trà · HTX',
     rating: 5.0,
     reviews: 2,
@@ -140,11 +140,11 @@ const DEFAULT_STOPS = [
 ];
 
 const DEFAULT_LEGS = [
-  { from: 'xuat-phat', to: 'nghi-duong', label: 'Xuất phát → Homestay', longHaul: true },
-  { from: 'nghi-duong', to: 'tra-chieu', label: 'Homestay → Trà chiều' },
-  { from: 'tra-chieu', to: 'nghi-duong', label: 'Trà chiều → về Homestay', overnight: true },
-  { from: 'nghi-duong', to: 'mua-qua', label: 'Homestay → Mua quả' },
-  { from: 'mua-qua', to: 'xuat-phat', label: 'Về Hà Nội', return: true, longHaul: true },
+  { from: 'xuat-phat', to: 'nghi-duong', label: 'Tập trung → Nghỉ dưỡng', longHaul: true },
+  { from: 'nghi-duong', to: 'tra-chieu', label: 'Nghỉ dưỡng → Trà chiều' },
+  { from: 'tra-chieu', to: 'nghi-duong', label: 'Trà chiều → về Nghỉ dưỡng', overnight: true },
+  { from: 'nghi-duong', to: 'mua-qua', label: 'Nghỉ dưỡng → Mua quả' },
+  { from: 'mua-qua', to: 'xuat-phat', label: 'Mua quả → về Tập trung', return: true, longHaul: true },
 ];
 
 /** Live stop list — mutated by the place editor / localStorage hydrate. */

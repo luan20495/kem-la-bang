@@ -2,7 +2,7 @@ import { stops, legs, getDefaultStops, getDefaultLegs, asset } from './journey.j
 
 const STORAGE_KEY = 'kem-places-v1';
 
-const COLOR_CYCLE = ['#FFC247', '#1F7A5C', '#2F7FB5', '#6AA33A', '#E35D2A', '#7C5CFC', '#0F5C4A', '#C45C26'];
+const COLOR_CYCLE = ['#FF9F0A', '#248A3D', '#007AFF', '#34C759', '#FF6937', '#AF52DE', '#64D2FF', '#FFD60A'];
 
 function deepClone(v) {
   return JSON.parse(JSON.stringify(v));
