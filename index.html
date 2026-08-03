@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Kẹm — hành trình 15–16/08/2026: bản đồ, lái xe qua các điểm dừng, nhạc nền."
+    />
+    <title>Kẹm</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,700;1,9..144,500&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div class="app" id="app">
+      <div id="map" aria-label="Bản đồ 2D hành trình"></div>
+      <canvas id="atmosphere" class="atmosphere" aria-hidden="true"></canvas>
+      <div class="grade" aria-hidden="true"></div>
+      <div class="vignette" aria-hidden="true"></div>
+
+      <header class="topbar">
+        <div class="brand brand--mobile glass">
+          <div class="brand__row">
+            <p class="brand__dates">15 → 16 · 08 · 2026</p>
+          </div>
+          <h1 class="brand__name">Kẹm</h1>
+          <p class="brand__tag">Đi giữa trời rực rỡ</p>
+        </div>
+
+        <div class="topbar__actions">
+          <button class="chip glass" type="button" id="btn-overview">Toàn cảnh</button>
+          <button class="chip chip--cinema" type="button" id="btn-drive" aria-pressed="false">
+            <span class="chip__pulse" aria-hidden="true"></span>
+            <span class="chip__cinema-label">Lái xe</span>
+          </button>
+          <button class="chip chip--music" type="button" id="music-toggle" aria-pressed="false">
+            <span class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+            <span class="chip__label">Phát nhạc</span>
+          </button>
+        </div>
+      </header>
+
+      <aside class="rail glass" aria-label="Các điểm dừng">
+        <header class="brand brand--rail">
+          <div class="brand__row">
+            <p class="brand__dates">15 → 16 · 08 · 2026</p>
+          </div>
+          <h1 class="brand__name">Kẹm</h1>
+          <p class="brand__tag">Đi giữa trời rực rỡ</p>
+        </header>
+        <div class="rail__head">
+          <p class="rail__eyebrow">Hành trình</p>
+          <p class="rail__meta">4 điểm · 1 đêm · về trước trưa</p>
+        </div>
+        <ol class="timeline" id="timeline"></ol>
+        <div class="rail__foot">
+          <div class="routes" id="route-picker">
+            <p class="routes__label">Tuyến đường</p>
+            <div class="routes__legs" id="route-legs"></div>
+          </div>
+          <p class="rail__blurb" id="rail-blurb">—</p>
+          <a
+            class="maps-cta"
+            id="rail-maps"
+            href="#"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <span class="maps-cta__media" aria-hidden="true">
+              <img class="maps-cta__img" id="rail-maps-img" src="" alt="" />
+              <span class="maps-cta__pin">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" aria-hidden="true">
+                  <path
+                    d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12Z"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linejoin="round"
+                  />
+                  <circle cx="12" cy="10" r="2.4" fill="currentColor" />
+                </svg>
+              </span>
+            </span>
+            <span class="maps-cta__body">
+              <span class="maps-cta__eyebrow">Chỉ đường · Google Maps</span>
+              <span class="maps-cta__title" id="rail-maps-title">Southern Star</span>
+              <span class="maps-cta__place" id="rail-maps-place">897 Giải Phóng, Hà Nội</span>
+            </span>
+            <span class="maps-cta__go" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
+                <path
+                  d="M5 12h12M13 6l6 6-6 6"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </span>
+          </a>
+        </div>
+      </aside>
+
+      <div class="hud glass" id="hud">
+        <div class="hud__time">
+          <span class="hud__label">Thời gian hành trình</span>
+          <strong id="hud-clock">15/08 · 08:30</strong>
+        </div>
+        <div class="hud__track">
+          <div class="hud__ticks" id="hud-ticks" aria-hidden="true"></div>
+          <input
+            class="hud__scrub"
+            id="time-scrub"
+            type="range"
+            min="0"
+            max="1000"
+            value="0"
+            aria-label="Kéo để xem giờ · địa điểm trên hành trình"
+          />
+        </div>
+        <div class="hud__meta">
+          <span class="hud__place" id="hud-place">Southern Star</span>
+          <span class="hud__phase" id="hud-phase">Tập trung & xuất phát</span>
+        </div>
+      </div>
+
+      <div class="music-bg" id="music-dock" aria-hidden="true">
+        <div id="yt-player"></div>
+      </div>
+
+      <div class="boot" id="boot">
+        <canvas id="boot-canvas" class="boot__canvas" aria-hidden="true"></canvas>
+        <div class="boot__copy">
+          <p class="boot__eyebrow">Đang mở hành trình</p>
+          <p class="boot__brand">Kẹm</p>
+          <p class="boot__status" id="boot-status">Chuẩn bị bản đồ…</p>
+          <div class="boot__bar"><i id="boot-bar"></i></div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
