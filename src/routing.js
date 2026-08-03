@@ -5,18 +5,30 @@ const byId = Object.fromEntries(stops.map((s) => [s.id, s]));
 /** Optional via-points to invent distinct corridors when OSRM returns few alts. */
 const LEG_VIAS = {
   'xuat-phat>nghi-duong': [
+    {
+      tag: 'Qua Cầu Thanh Trì',
+      points: [
+        { lng: 105.8835, lat: 20.9678 }, // Cầu Thanh Trì
+        { lng: 105.938, lat: 21.118 }, // CT Hà Nội – Thái Nguyên
+      ],
+    },
     { lng: 105.8698, lat: 21.002, tag: 'Qua Cầu Vĩnh Tuy' },
-    { lng: 105.848, lat: 21.594, tag: 'Qua Thái Nguyên' },
     { lng: 105.72, lat: 21.42, tag: 'Qua Phổ Yên' },
   ],
   'mua-qua>xuat-phat': [
+    {
+      tag: 'Qua Cầu Thanh Trì',
+      points: [
+        { lng: 105.938, lat: 21.118 },
+        { lng: 105.8835, lat: 20.9678 },
+      ],
+    },
     { lng: 105.8698, lat: 21.002, tag: 'Qua Cầu Vĩnh Tuy' },
-    { lng: 105.848, lat: 21.594, tag: 'Qua Thái Nguyên' },
     { lng: 105.72, lat: 21.42, tag: 'Qua Phổ Yên' },
   ],
 };
 
-const PREFERRED_CORRIDOR = 'Qua Cầu Vĩnh Tuy';
+const PREFERRED_CORRIDOR = 'Qua Cầu Thanh Trì';
 
 function formatKm(meters) {
   return `${(meters / 1000).toFixed(0)} km`;
@@ -138,7 +150,8 @@ export async function fetchLegAlternatives(from, to, legKey) {
   const vias = LEG_VIAS[legKey] || [];
   for (const via of vias) {
     try {
-      const viaRoutes = await fetchOsrmOnce([from, via, to]);
+      const mids = via.points || [{ lng: via.lng, lat: via.lat }];
+      const viaRoutes = await fetchOsrmOnce([from, ...mids, to]);
       if (viaRoutes[0]) {
         collected.push({ ...viaRoutes[0], tag: via.tag });
       }

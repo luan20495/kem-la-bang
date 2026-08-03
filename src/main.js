@@ -108,9 +108,11 @@ function corridorOptions(builtLegs) {
     const short =
       alt.tag === 'Nhanh nhất'
         ? 'Nhanh nhất'
-        : alt.tag === 'Qua Cầu Vĩnh Tuy'
-          ? 'Vĩnh Tuy'
-          : alt.tag.replace(/^Qua\s+/i, '');
+        : alt.tag === 'Qua Cầu Thanh Trì'
+          ? 'Thanh Trì'
+          : alt.tag === 'Qua Cầu Vĩnh Tuy'
+            ? 'Vĩnh Tuy'
+            : alt.tag.replace(/^Qua\s+/i, '');
     const go = choosable.find((l) => !l.return);
     const back = choosable.find((l) => l.return);
     const goAlt = go?.alternatives?.find((a) => a.tag === alt.tag) || go?.alternatives?.[index];
