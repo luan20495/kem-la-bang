@@ -186,6 +186,34 @@ export function addRouteLayers(map, builtLegs) {
   map.addSource('route-out', { type: 'geojson', data: outbound });
   if (inbound) map.addSource('route-in', { type: 'geojson', data: inbound });
 
+  // Return under outbound so shared roads stay green; return-only spurs still show.
+  if (inbound) {
+    map.addLayer({
+      id: 'route-in-glow',
+      type: 'line',
+      source: 'route-in',
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': '#FF8A4C',
+        'line-width': 12,
+        'line-opacity': 0.32,
+        'line-blur': 1.1,
+      },
+    });
+    map.addLayer({
+      id: 'route-in-core',
+      type: 'line',
+      source: 'route-in',
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': '#E35D2A',
+        'line-width': 5,
+        'line-opacity': 0.92,
+        'line-dasharray': [2.4, 1.4],
+      },
+    });
+  }
+
   map.addLayer({
     id: 'route-out-glow',
     type: 'line',
@@ -210,21 +238,6 @@ export function addRouteLayers(map, builtLegs) {
       'line-opacity': 0.95,
     },
   });
-
-  if (inbound) {
-    map.addLayer({
-      id: 'route-in-core',
-      type: 'line',
-      source: 'route-in',
-      layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: {
-        'line-color': '#E35D2A',
-        'line-width': 3.5,
-        'line-opacity': 0.75,
-        'line-dasharray': [2, 1.6],
-      },
-    });
-  }
 
   map.addSource('traveler', {
     type: 'geojson',

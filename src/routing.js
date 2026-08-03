@@ -46,6 +46,19 @@ async function fetchOsrmOnce(coords) {
   }
 }
 
+/** Pin exact stop points onto the polyline so access spurs are always drawn. */
+function pinStops(coordinates, from, to) {
+  if (!coordinates?.length) return coordinates;
+  const start = [from.lng, from.lat];
+  const end = [to.lng, to.lat];
+  const out = coordinates.map((c) => [c[0], c[1]]);
+  if (haversine(start, out[0]) > 12) out.unshift(start);
+  else out[0] = start;
+  if (haversine(end, out[out.length - 1]) > 12) out.push(end);
+  else out[out.length - 1] = end;
+  return out;
+}
+
 function fallbackCurve(from, to, steps = 80) {
   const coordinates = [];
   const midLat = (from.lat + to.lat) / 2;
@@ -137,7 +150,10 @@ export async function fetchLegAlternatives(from, to, legKey) {
 
   // Prefer up to 3 options, sorted by duration
   unique.sort((a, b) => a.duration - b.duration);
-  unique = unique.slice(0, 3);
+  unique = unique.slice(0, 3).map((r) => ({
+    ...r,
+    coordinates: pinStops(r.coordinates, from, to),
+  }));
   return labelAlternatives(unique);
 }
 
@@ -160,6 +176,7 @@ export async function buildAllLegs() {
       });
     } catch {
       const fb = fallbackCurve(from, to);
+      fb.coordinates = pinStops(fb.coordinates, from, to);
       const alternatives = labelAlternatives([fb]);
       built.push({
         ...leg,
