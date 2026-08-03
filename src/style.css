@@ -409,9 +409,17 @@ html[data-grade='dawn'] .grade {
   box-shadow: inset 0 0 0 1px rgba(11, 28, 36, 0.05);
 }
 
+.route-seg__item {
+  position: relative;
+  display: flex;
+  min-width: 0;
+}
+
 .route-seg__btn {
+  flex: 1;
   min-height: 2rem;
-  padding: 0.35rem 0.3rem;
+  min-width: 0;
+  padding: 0.35rem 1.35rem 0.35rem 0.35rem;
   border-radius: 0.65rem;
   font-size: 0.72rem;
   font-weight: 700;
@@ -437,6 +445,37 @@ html[data-grade='dawn'] .grade {
     0 0 0 1px rgba(15, 92, 74, 0.12);
 }
 
+.route-seg__del {
+  position: absolute;
+  top: 50%;
+  right: 0.2rem;
+  z-index: 2;
+  width: 1.15rem;
+  height: 1.15rem;
+  margin-top: -0.575rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--ink-soft);
+  background: rgba(255, 255, 255, 0.75);
+  opacity: 0.7;
+  transition:
+    opacity 0.2s var(--ease),
+    color 0.2s var(--ease),
+    background 0.2s var(--ease);
+}
+
+.route-seg__item:hover .route-seg__del,
+.route-seg__del:focus-visible {
+  opacity: 1;
+}
+
+.route-seg__del:hover {
+  color: #b42318;
+  background: rgba(255, 236, 232, 0.95);
+}
+
 .route-seg__meta {
   display: flex;
   flex-wrap: wrap;
@@ -447,9 +486,17 @@ html[data-grade='dawn'] .grade {
   padding: 0 0.15rem;
 }
 
+.route-seg__tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem 0.75rem;
+  margin: 0.45rem 0.15rem 0;
+}
+
 .route-seg__gmaps {
   display: inline-block;
-  margin: 0.45rem 0.15rem 0;
   font-size: 0.72rem;
   font-weight: 600;
   color: var(--forest);
@@ -460,6 +507,18 @@ html[data-grade='dawn'] .grade {
 .route-seg__gmaps:hover {
   color: var(--ink);
   border-bottom-color: var(--ink);
+}
+
+.route-seg__restore {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  text-decoration: underline;
+  text-underline-offset: 0.12em;
+}
+
+.route-seg__restore:hover {
+  color: var(--forest);
 }
 
 .route-seg__sum {

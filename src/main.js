@@ -102,8 +102,11 @@ function corridorOptions(builtLegs) {
   const choosable = builtLegs.filter((leg) => (leg.alternatives?.length || 0) > 1);
   if (!choosable.length) return [];
 
+  const removed = getRemovedCorridors();
   const primary = choosable.find((l) => !l.return) || choosable[0];
-  return primary.alternatives.map((alt, index) => {
+  return primary.alternatives
+    .filter((alt) => !removed.has(alt.tag))
+    .map((alt, index) => {
     const short =
       alt.tag === 'Nhanh nhất'
         ? 'Nhanh nhất'
@@ -116,9 +119,8 @@ function corridorOptions(builtLegs) {
               : alt.tag.replace(/^Qua\s+/i, '');
     const go = choosable.find((l) => !l.return);
     const back = choosable.find((l) => l.return);
-    const goAlt = go?.alternatives?.find((a) => a.tag === alt.tag) || go?.alternatives?.[index];
-    const backAlt =
-      back?.alternatives?.find((a) => a.tag === alt.tag) || back?.alternatives?.[index];
+    const goAlt = go?.alternatives?.find((a) => a.tag === alt.tag);
+    const backAlt = back?.alternatives?.find((a) => a.tag === alt.tag);
     const parts = [];
     if (goAlt) parts.push(`Đi ${goAlt.kmLabel}`);
     if (backAlt) parts.push(`Về ${backAlt.kmLabel}`);
@@ -133,10 +135,25 @@ function corridorOptions(builtLegs) {
       time: timeParts.join(' → '),
       selected: choosable.every((leg) => {
         const match = leg.alternatives.findIndex((a) => a.tag === alt.tag);
-        return (match >= 0 ? match : index) === leg.selected;
+        return match >= 0 && match === leg.selected;
       }),
     };
   });
+}
+
+const REMOVED_KEY = 'kem-removed-corridors';
+
+function getRemovedCorridors() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(REMOVED_KEY) || '[]');
+    return new Set(Array.isArray(raw) ? raw : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function setRemovedCorridors(tags) {
+  localStorage.setItem(REMOVED_KEY, JSON.stringify([...tags]));
 }
 
 function applyCorridor(builtLegs, tag) {
@@ -147,13 +164,25 @@ function applyCorridor(builtLegs, tag) {
   });
 }
 
-function renderRoutePicker(builtLegs, onPickCorridor) {
+function ensureSelectedVisible(builtLegs) {
+  const options = corridorOptions(builtLegs);
+  if (!options.length) return null;
+  const selected = options.find((o) => o.selected);
+  if (selected) return selected.tag;
+  const fallback = options[0].tag;
+  applyCorridor(builtLegs, fallback);
+  return fallback;
+}
+
+function renderRoutePicker(builtLegs, handlers = {}) {
+  const { onPickCorridor, onRemoveCorridor, onRestoreCorridors } = handlers;
   const host = document.getElementById('route-legs');
   const label = document.querySelector('.routes__label');
   if (!host) return;
 
+  const removed = getRemovedCorridors();
   const options = corridorOptions(builtLegs);
-  if (!options.length) {
+  if (!options.length && !removed.size) {
     if (label) label.hidden = true;
     host.innerHTML = '';
     return;
@@ -167,29 +196,60 @@ function renderRoutePicker(builtLegs, onPickCorridor) {
   const active = options.find((o) => o.selected) || options[0];
   const gmaps =
     'https://www.google.com/maps/dir/?api=1&origin=20.9794135,105.8415574&destination=21.6227277,105.534959&travelmode=driving';
+  const canDelete = options.length > 1;
+
   host.innerHTML = `
     <div class="route-seg" role="radiogroup" aria-label="Chọn tuyến lên Kẹm">
       ${options
         .map(
           (o) => `
-        <button type="button" class="route-seg__btn ${o.selected ? 'is-on' : ''}"
-          role="radio" aria-checked="${o.selected}" data-tag="${o.tag}" title="${o.tag}">
-          ${o.short}
-        </button>`
+        <div class="route-seg__item ${o.selected ? 'is-on' : ''}">
+          <button type="button" class="route-seg__btn ${o.selected ? 'is-on' : ''}"
+            role="radio" aria-checked="${o.selected}" data-tag="${o.tag}" title="${o.tag}">
+            ${o.short}
+          </button>
+          ${
+            canDelete
+              ? `<button type="button" class="route-seg__del" data-del="${o.tag}" aria-label="Xóa tuyến ${o.short}" title="Xóa tuyến">×</button>`
+              : ''
+          }
+        </div>`
         )
         .join('')}
     </div>
-    <p class="route-seg__meta">
-      <span class="route-seg__sum">${active.summary}</span>
-      <span class="route-seg__time">${active.time}</span>
-    </p>
-    <a class="route-seg__gmaps" href="${gmaps}" target="_blank" rel="noopener noreferrer">
-      So với Google Maps
-    </a>
+    ${
+      active
+        ? `<p class="route-seg__meta">
+            <span class="route-seg__sum">${active.summary}</span>
+            <span class="route-seg__time">${active.time}</span>
+          </p>`
+        : ''
+    }
+    <div class="route-seg__tools">
+      <a class="route-seg__gmaps" href="${gmaps}" target="_blank" rel="noopener noreferrer">
+        So với Google Maps
+      </a>
+      ${
+        removed.size
+          ? `<button type="button" class="route-seg__restore" id="route-restore">
+              Khôi phục ${removed.size} tuyến đã xóa
+            </button>`
+          : ''
+      }
+    </div>
   `;
 
   host.querySelectorAll('.route-seg__btn').forEach((btn) => {
-    btn.addEventListener('click', () => onPickCorridor(btn.dataset.tag));
+    btn.addEventListener('click', () => onPickCorridor?.(btn.dataset.tag));
+  });
+  host.querySelectorAll('.route-seg__del').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      onRemoveCorridor?.(btn.dataset.del);
+    });
+  });
+  document.getElementById('route-restore')?.addEventListener('click', () => {
+    onRestoreCorridors?.();
   });
 }
 
@@ -600,12 +660,40 @@ async function main() {
       setDriveBtn(false);
     }
     applyCorridor(state.builtLegs, tag);
-    refreshRouteGeometry(map, state.builtLegs);
+    refreshRouteGeometry(map, state.builtLegs, getRemovedCorridors());
     rebuildPathControllers(map);
-    renderRoutePicker(state.builtLegs, onPickRoute);
+    renderRoutePicker(state.builtLegs, routePickerHandlers);
     document.getElementById('hud-phase').textContent = `Tuyến · ${tag}`;
   };
-  renderRoutePicker(builtLegs, onPickRoute);
+
+  const onRemoveCorridor = (tag) => {
+    const options = corridorOptions(state.builtLegs);
+    if (options.length <= 1) return;
+    const removed = getRemovedCorridors();
+    removed.add(tag);
+    setRemovedCorridors(removed);
+    const next = ensureSelectedVisible(state.builtLegs);
+    refreshRouteGeometry(map, state.builtLegs, removed);
+    rebuildPathControllers(map);
+    renderRoutePicker(state.builtLegs, routePickerHandlers);
+    if (next) {
+      document.getElementById('hud-phase').textContent = `Đã xóa tuyến · còn ${next}`;
+    }
+  };
+
+  const onRestoreCorridors = () => {
+    setRemovedCorridors(new Set());
+    refreshRouteGeometry(map, state.builtLegs, new Set());
+    rebuildPathControllers(map);
+    renderRoutePicker(state.builtLegs, routePickerHandlers);
+    document.getElementById('hud-phase').textContent = 'Đã khôi phục mọi tuyến';
+  };
+
+  const routePickerHandlers = { onPickCorridor: onPickRoute, onRemoveCorridor, onRestoreCorridors };
+
+  ensureSelectedVisible(builtLegs);
+  refreshRouteGeometry(map, builtLegs, getRemovedCorridors());
+  renderRoutePicker(builtLegs, routePickerHandlers);
   renderHudTicks();
   setHud(0);
 

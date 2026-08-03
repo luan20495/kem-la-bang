@@ -270,11 +270,12 @@ export function addRouteLayers(map, builtLegs) {
 }
 
 /** Redraw selected + alternative geometries after user picks a tuyến. */
-export function refreshRouteGeometry(map, builtLegs) {
+export function refreshRouteGeometry(map, builtLegs, hiddenTags = new Set()) {
   const altFeatures = [];
   builtLegs.forEach((leg, legIndex) => {
     (leg.alternatives || []).forEach((alt, ai) => {
       if (ai === leg.selected) return;
+      if (hiddenTags.has(alt.tag)) return;
       altFeatures.push({
         type: 'Feature',
         properties: { legIndex, altIndex: ai, tone: ai },
