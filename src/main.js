@@ -99,7 +99,9 @@ function updateSheet(stop) {
 }
 
 function corridorOptions(builtLegs) {
-  const choosable = builtLegs.filter((leg) => (leg.alternatives?.length || 0) > 1);
+  const choosable = builtLegs.filter(
+    (leg) => (leg.longHaul || leg.return) && (leg.alternatives?.length || 0) > 1
+  );
   if (!choosable.length) return [];
 
   const removed = getRemovedCorridors();
@@ -151,6 +153,8 @@ function setRemovedCorridors(tags) {
 
 function applyCorridor(builtLegs, tag) {
   builtLegs.forEach((leg) => {
+    // Only long-haul HN↔Kẹm hops follow the 3 corridor styles
+    if (!leg.longHaul && !leg.return) return;
     if ((leg.alternatives?.length || 0) < 2) return;
     const idx = leg.alternatives.findIndex((a) => a.tag === tag);
     if (idx >= 0) selectLegAlternative(leg, idx);

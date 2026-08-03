@@ -43,6 +43,9 @@ const LEG_VIAS = {
 /** Soft default — thông thoáng matches the trip vibe; user can switch. */
 const DEFAULT_CORRIDOR = 'Thông thoáng';
 
+/** Only these long-haul hops use the 3 corridor styles. */
+const LONG_HAUL_KEYS = new Set(['xuat-phat>nghi-duong', 'mua-qua>xuat-phat']);
+
 const CORRIDOR_BLURB = {
   'Nhanh nhất': 'Ngắn nhất · tới nơi sớm nhất',
   'Thông thoáng': 'Ít kẹt · đường rộng, chạy êm',
@@ -194,11 +197,12 @@ async function loadBakedFile(path) {
   }
 }
 
-/** Load every named corridor for a leg (go or back). */
+/** Load every named corridor for a long-haul leg only. */
 async function loadAllBakedCorridors(legKey) {
+  if (!LONG_HAUL_KEYS.has(legKey)) return [];
   const index = await loadBakedIndex();
   if (!index?.corridors?.length) return [];
-  const isReturn = legKey.startsWith('mua-qua>');
+  const isReturn = legKey === 'mua-qua>xuat-phat';
   const out = [];
   for (const item of index.corridors) {
     const path = isReturn ? item.back : item.go;
@@ -210,64 +214,73 @@ async function loadAllBakedCorridors(legKey) {
 
 export async function fetchLegAlternatives(from, to, legKey) {
   const collected = [];
+  const longHaul = LONG_HAUL_KEYS.has(legKey);
 
-  // 1) All precomputed corridors (user picks later)
-  const baked = await loadAllBakedCorridors(legKey);
-  collected.push(...baked);
-
-  // 2) Live OSRM direct as Nhanh nhất (if not already baked)
-  if (!collected.some((r) => r.tag === 'Nhanh nhất')) {
-    try {
-      const direct = await fetchOsrmOnce([from, to]);
-      if (direct[0]) {
-        collected.push({
-          ...direct[0],
-          tag: 'Nhanh nhất',
-          preserveTag: true,
-          source: 'osrm-direct',
-        });
-      }
-    } catch {
-      /* continue */
-    }
+  if (longHaul) {
+    const baked = await loadAllBakedCorridors(legKey);
+    collected.push(...baked);
   }
 
-  const vias = LEG_VIAS[legKey] || [];
-  for (const via of vias) {
-    if (collected.some((r) => r.tag === via.tag)) continue;
-    try {
-      const mids = via.points || [{ lng: via.lng, lat: via.lat }];
-      const viaRoutes = await fetchOsrmOnce([from, ...mids, to]);
-      if (viaRoutes[0]) {
-        collected.push({
-          ...viaRoutes[0],
-          tag: via.tag,
-          preserveTag: true,
-          source: 'osrm-via',
-        });
+  // Direct OSRM between the two stops (always correct locally)
+  try {
+    const direct = await fetchOsrmOnce([from, to]);
+    if (direct[0]) {
+      collected.push({
+        ...direct[0],
+        tag: longHaul ? 'Nhanh nhất' : 'Nhanh nhất',
+        preserveTag: true,
+        source: 'osrm-direct',
+      });
+    }
+  } catch {
+    /* continue */
+  }
+
+  if (longHaul) {
+    const vias = LEG_VIAS[legKey] || [];
+    for (const via of vias) {
+      if (collected.some((r) => r.tag === via.tag)) continue;
+      try {
+        const mids = via.points || [{ lng: via.lng, lat: via.lat }];
+        const viaRoutes = await fetchOsrmOnce([from, ...mids, to]);
+        if (viaRoutes[0]) {
+          collected.push({
+            ...viaRoutes[0],
+            tag: via.tag,
+            preserveTag: true,
+            source: 'osrm-via',
+          });
+        }
+      } catch {
+        /* skip */
       }
-    } catch {
-      /* skip */
     }
   }
 
   let unique = dedupeRoutes(collected);
   if (!unique.length) {
-    unique = [fallbackCurve(from, to)];
+    unique = [{ ...fallbackCurve(from, to), tag: 'Nhanh nhất', preserveTag: true }];
   }
 
-  // Fixed menu order: Nhanh nhất → Thông thoáng → Cao tốc
-  const order = ['Nhanh nhất', 'Thông thoáng', 'Cao tốc'];
-  unique.sort((a, b) => {
-    const ia = order.indexOf(a.tag);
-    const ib = order.indexOf(b.tag);
-    if (ia >= 0 || ib >= 0) return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
-    return a.duration - b.duration;
-  });
-  // Keep only the three named styles (+ any leftover only if missing)
-  unique = unique.filter((r) => order.includes(r.tag)).slice(0, 3);
+  if (longHaul) {
+    const order = ['Nhanh nhất', 'Thông thoáng', 'Cao tốc'];
+    unique.sort((a, b) => {
+      const ia = order.indexOf(a.tag);
+      const ib = order.indexOf(b.tag);
+      if (ia >= 0 || ib >= 0) return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+      return a.duration - b.duration;
+    });
+    unique = unique.filter((r) => order.includes(r.tag)).slice(0, 3);
+  } else {
+    // Local hop: one clean OSRM path only
+    unique = unique.slice(0, 1);
+    if (unique[0] && !unique[0].tag) {
+      unique[0] = { ...unique[0], tag: 'Nhanh nhất', preserveTag: true };
+    }
+  }
+
   if (!unique.length) {
-    unique = [fallbackCurve(from, to)];
+    unique = [{ ...fallbackCurve(from, to), tag: 'Nhanh nhất', preserveTag: true }];
   }
 
   unique = unique.map((r) => ({

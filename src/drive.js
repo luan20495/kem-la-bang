@@ -167,24 +167,35 @@ export function createDriveTour({
     const first = stops[0];
     car.setLngLat(first.lng, first.lat);
     car.setBearing(0);
+    map.jumpTo({ center: [first.lng, first.lat], zoom: Math.max(map.getZoom(), 12.5) });
     await visitStop(first.id, { showPhotos: true });
     if (aborted) return;
 
     for (const leg of driveLegs) {
       if (aborted) return;
+      // Always leave from the leg's true origin (fixes restart / wrong hop)
+      const fromStop = byId[leg.from];
+      if (fromStop) {
+        car.setLngLat(fromStop.lng, fromStop.lat);
+      }
       const fromT = STOP_T[leg.from] ?? 0;
       const toT = STOP_T[leg.to] ?? Math.min(0.9, fromT + 0.2);
       onDepart?.(byId[leg.to], { t: fromT + 0.02 });
       car.setDriving(true);
-      const km = Math.max(8, (leg.distance || 40000) / 1000);
-      const durationSec = Math.min(16, Math.max(5.5, km * 0.2));
-      map.easeTo({ zoom: 11.3, duration: 450, essential: true });
+      const km = Math.max(3, (leg.distance || 15000) / 1000);
+      const durationSec = Math.min(14, Math.max(4, km * 0.22));
+      map.easeTo({ zoom: km > 40 ? 10.8 : 12.2, duration: 400, essential: true });
       await animateAlong(leg.coordinates, durationSec, fromT, toT);
       if (aborted) return;
-      await visitStop(leg.to, { showPhotos: true });
+      await visitStop(leg.to, {
+        showPhotos: !leg.overnight,
+        finale: false,
+      });
     }
 
     if (returnLeg && !aborted) {
+      const fromStop = byId[returnLeg.from];
+      if (fromStop) car.setLngLat(fromStop.lng, fromStop.lat);
       const fromT = STOP_T[returnLeg.from] ?? 0.84;
       onDepart?.(byId[returnLeg.to], { t: fromT });
       car.setDriving(true);
@@ -206,6 +217,7 @@ export function createDriveTour({
     start() {
       abort();
       aborted = false;
+      running = false;
       return run();
     },
     stop: abort,

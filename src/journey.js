@@ -146,10 +146,11 @@ export const trip = {
   end: '2026-08-16T12:00:00+07:00',
 };
 
-/** Route legs — car follows outbound stops in order, then returns home. */
+/** Route legs — đúng lịch trình thực tế. */
 export const legs = [
-  { from: 'xuat-phat', to: 'nghi-duong', label: 'Xuất phát → Homestay' },
+  { from: 'xuat-phat', to: 'nghi-duong', label: 'Xuất phát → Homestay', longHaul: true },
   { from: 'nghi-duong', to: 'tra-chieu', label: 'Homestay → Trà chiều' },
-  { from: 'tra-chieu', to: 'mua-qua', label: 'Trà chiều → Mua quả' },
-  { from: 'mua-qua', to: 'xuat-phat', label: 'Về Hà Nội', return: true },
+  { from: 'tra-chieu', to: 'nghi-duong', label: 'Trà chiều → về Homestay', overnight: true },
+  { from: 'nghi-duong', to: 'mua-qua', label: 'Homestay → Mua quả' },
+  { from: 'mua-qua', to: 'xuat-phat', label: 'Về Hà Nội', return: true, longHaul: true },
 ];
