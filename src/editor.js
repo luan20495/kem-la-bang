@@ -209,7 +209,7 @@ export function createPlacesEditor(opts) {
   });
 
   document.getElementById('places-reset')?.addEventListener('click', async () => {
-    if (!confirm('Khôi phục 4 điểm mặc định của Kẹm? Bản chỉnh sửa trên máy này sẽ mất.')) return;
+    if (!confirm('Khôi phục 6 điểm mặc định của Kẹm? Bản chỉnh sửa trên máy này sẽ mất.')) return;
     resetPlaces();
     clearForm();
     await afterChange('Đã khôi phục mặc định');

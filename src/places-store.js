@@ -87,7 +87,7 @@ function persist() {
     localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
-        v: 1,
+        v: 2,
         savedAt: Date.now(),
         stops: stops.map((s) => deepClone(s)),
       })
@@ -116,6 +116,27 @@ export function hydratePlaces() {
     if (!Array.isArray(data?.stops) || !data.stops.length) {
       return { fromStorage: false, count: stops.length };
     }
+
+    // v1 → v2: append return-day lunch + gift stops when still on the old 4-stop default.
+    if ((data.v ?? 1) < 2) {
+      const ids = new Set(data.stops.map((s) => s.id));
+      const oldDefaultIds = ['xuat-phat', 'nghi-duong', 'tra-chieu', 'mua-qua'];
+      const stillOldDefault =
+        data.stops.length === 4 && oldDefaultIds.every((id) => ids.has(id));
+      if (stillOldDefault) {
+        const defs = getDefaultStops();
+        const merged = [
+          ...data.stops,
+          defs.find((s) => s.id === 'an-trua-ve'),
+          defs.find((s) => s.id === 'mua-qua-ve'),
+        ].filter(Boolean);
+        applyList(merged);
+        replaceArray(legs, deepClone(getDefaultLegs()));
+        persist();
+        return { fromStorage: true, migrated: true, count: stops.length };
+      }
+    }
+
     applyList(data.stops);
     return { fromStorage: true, count: stops.length };
   } catch {

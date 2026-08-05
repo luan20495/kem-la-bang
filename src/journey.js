@@ -120,7 +120,7 @@ const DEFAULT_STOPS = [
     role: 'Mua quả khi ra về',
     name: 'Matcha Lạc Yên',
     place: 'Hợp tác xã trà · đặc sản mang về',
-    blurb: 'Ghé mua quả & đặc sản trước khi xuôi Hà Nội — về nhà trước trưa.',
+    blurb: 'Ghé mua quả & đặc sản sáng sớm — rồi tiếp tục hành trình về Hà Nội.',
     lat: 21.6480136,
     lng: 105.5634686,
     mapsUrl: 'https://maps.app.goo.gl/sYb8Kx9AEAnUwKqX6',
@@ -137,6 +137,41 @@ const DEFAULT_STOPS = [
       { src: asset('photos/mua-qua/3.jpg'), caption: 'Kẹo lạc đặc sản' },
     ],
   },
+  {
+    id: 'an-trua-ve',
+    order: 5,
+    day: '16/08',
+    time: 'Trưa',
+    role: 'Ăn trưa lúc về',
+    name: 'Nhà Hàng Hương Sen',
+    place: 'Các món từ Trâu · đặc sản Thái Nguyên',
+    blurb:
+      'Trưa hôm sau — ngồi lại một bữa đầy đủ với các món từ trâu, rồi tiếp tục xuôi về Hà Nội.',
+    lat: 21.6362874,
+    lng: 105.6434015,
+    mapsUrl: 'https://maps.app.goo.gl/mURXRoEcnXonXDtWA',
+    color: '#FF6937',
+    category: 'Nhà hàng',
+    address: 'Thái Nguyên',
+    photos: [],
+  },
+  {
+    id: 'mua-qua-ve',
+    order: 6,
+    day: '16/08',
+    time: 'Chiều',
+    role: 'Mua quà lúc về',
+    name: 'Bánh chưng Tâm Quang',
+    place: 'Bánh chưng · quà mang về',
+    blurb: 'Ghé mua bánh chưng và quà đặc sản trước khi về đến điểm tập trung.',
+    lat: 21.6379533,
+    lng: 105.7689958,
+    mapsUrl: 'https://maps.app.goo.gl/PCwp75qg6waFZE61A',
+    color: '#AF52DE',
+    category: 'Quà tặng · Đặc sản',
+    address: 'Thái Nguyên',
+    photos: [],
+  },
 ];
 
 const DEFAULT_LEGS = [
@@ -144,7 +179,9 @@ const DEFAULT_LEGS = [
   { from: 'nghi-duong', to: 'tra-chieu', label: 'Nghỉ dưỡng → Trà chiều' },
   { from: 'tra-chieu', to: 'nghi-duong', label: 'Trà chiều → về Nghỉ dưỡng', overnight: true },
   { from: 'nghi-duong', to: 'mua-qua', label: 'Nghỉ dưỡng → Mua quả' },
-  { from: 'mua-qua', to: 'xuat-phat', label: 'Mua quả → về Tập trung', return: true, longHaul: true },
+  { from: 'mua-qua', to: 'an-trua-ve', label: 'Mua quả → Ăn trưa' },
+  { from: 'an-trua-ve', to: 'mua-qua-ve', label: 'Ăn trưa → Mua quà về' },
+  { from: 'mua-qua-ve', to: 'xuat-phat', label: 'Mua quà → về Tập trung', return: true, longHaul: true },
 ];
 
 /** Live stop list — mutated by the place editor / localStorage hydrate. */
@@ -169,5 +206,5 @@ export const trip = {
   youtubeUrl: 'https://www.youtube.com/watch?v=pjm2aXT3A2M',
   youtubeMusicUrl: 'https://music.youtube.com/watch?v=Lwuxlb83LD8',
   start: '2026-08-15T08:30:00+07:00',
-  end: '2026-08-16T12:00:00+07:00',
+  end: '2026-08-16T16:00:00+07:00',
 };
